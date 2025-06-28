@@ -93,8 +93,17 @@ async function startOrExtendWebhookRecording(camera: { id: string, rtspUrl: stri
 export async function POST(req: NextRequest) {
     console.log(`[Webhook] --- Incoming request received at ${new Date().toISOString()} ---`);
     try {
-        console.log('[Webhook] Attempting to parse JSON payload...');
-        const payload = await req.json();
+        console.log('[Webhook] Reading request body as text...');
+        const bodyText = await req.text();
+        console.log('[Webhook] Raw body received:', `"${bodyText}"`); // Log with quotes to see whitespace
+
+        if (!bodyText) {
+            console.error('[Webhook] Rejecting request: Body is empty.');
+            return NextResponse.json({ error: 'Request body is empty' }, { status: 400 });
+        }
+
+        console.log('[Webhook] Attempting to parse text as JSON...');
+        const payload = JSON.parse(bodyText);
         console.log('[Webhook] Successfully parsed payload:', payload);
 
         const { camera_id, event } = payload;
@@ -117,11 +126,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, message: 'Recording triggered or extended.' });
 
     } catch (error) {
-        console.error('[Webhook] Error processing request. The request body may be malformed or empty.');
+        console.error('[Webhook] Error processing request. The request body may be malformed.');
         console.error('[Webhook] Raw Error:', error);
         // Handle cases where body is not valid JSON
         if (error instanceof SyntaxError) {
-             return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 });
+             return NextResponse.json({ error: 'Invalid JSON in request body.' }, { status: 400 });
         }
         return NextResponse.json({ error: 'Invalid request' }, { status: 500 });
     }
