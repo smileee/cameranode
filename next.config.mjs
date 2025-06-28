@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack: (config, { isServer }) => {
+    // No special externals needed now that we use ffmpeg-static
+    
     // Exclude fsevents from being bundled by Webpack
     if (!isServer) {
       config.externals.push('fsevents');

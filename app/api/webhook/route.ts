@@ -1,97 +1,128 @@
-import { NextResponse } from 'next/server';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
+import { NextRequest, NextResponse } from 'next/server';
+import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
+import fs from 'fs/promises';
+import { CAMERAS } from '@/cameras.config';
+import { getCameraState, setCameraWebhookRecordingProcess, clearCameraWebhookRecordingProcess, stopCameraWebhookRecordingProcess } from '@/server/state';
+import { generateThumbnail } from '@/server/ffmpeg-utils';
 
-// Define the shape of our data
-interface WebhookEntry {
-  receivedAt: string;
-  payload: any;
-}
+const CLIP_DURATION_SECONDS = 60;
+let ffmpegPath: string | null = null;
 
-interface Data {
-  webhooks: WebhookEntry[];
-}
+const resolveFfmpegPath = () => {
+    if (ffmpegPath) return ffmpegPath;
+    try {
+        // Use eval to avoid Next.js bundler transforming the require call
+        ffmpegPath = (eval('require'))('ffmpeg-static') as string;
+    } catch (e) {
+        console.warn('[Webhook] ffmpeg-static not found, falling back to system ffmpeg');
+        ffmpegPath = 'ffmpeg';
+    }
+    return ffmpegPath;
+};
 
-// Configure the LowDB instance
-const file = path.join(process.cwd(), 'db.json');
-const adapter = new JSONFile<Data>(file);
-const db = new Low<Data>(adapter, { webhooks: [] });
+const stopWebhookRecording = (cameraId: string) => {
+    console.log(`[Webhook] Timer finished for camera ${cameraId}. Stopping recording.`);
+    stopCameraWebhookRecordingProcess(cameraId);
+};
 
-// NOTE: For production you should move these to environment variables.
-const SMS_API_URL = 'https://gateway-pool.sendeasy.pro/bulk-sms';
-const SMS_TOKEN = process.env.SMS_API_TOKEN || '08164ddd-61aa-4c7b-8faa-e24ba7e3bfe0';
-const DESTINATION_NUMBER = process.env.SMS_DESTINATION || '+17743010298';
-const ALERT_MESSAGE = process.env.SMS_ALERT_MESSAGE || 'CHECK FOR DUCKS';
+async function startOrExtendWebhookRecording(camera: { id: string, rtspUrl: string }): Promise<void> {
+    const { id: cameraId, rtspUrl } = camera;
+    const state = getCameraState(cameraId);
 
-export async function POST(request: Request) {
-  try {
-    const payload = await request.json();
-
-    // Read data from DB
-    await db.read();
-    db.data ||= { webhooks: [] }; // Ensure db.data is not null
-
-    // Save the incoming webhook to the database
-    db.data.webhooks.push({
-      receivedAt: new Date().toISOString(),
-      payload: payload,
-    });
-    
-    // Write to file
-    await db.write();
-
-    // Basic validation
-    // if (!Array.isArray(payload?.detections)) {
-    //   return NextResponse.json({ error: 'Invalid payload: missing detections array' }, { status: 400 });
-    // }
-
-    // Check if any detected object is a bird (case-insensitive, singular/plural)
-    const hasBird = payload.detections.some((d: any) => {
-      const obj = String(d?.object || '').toLowerCase();
-      return obj.includes('bird');
-    });
-
-    if (hasBird) {
-      // Fire off SMS alert
-      try {
-        const smsRes = await fetch(SMS_API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': SMS_TOKEN,
-            Authorization: `Bearer ${SMS_TOKEN}`,
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                number: DESTINATION_NUMBER,
-                message: ALERT_MESSAGE,
-              },
-            ],
-          }),
-        });
-
-        if (!smsRes.ok) {
-          const text = await smsRes.text();
-          console.error('SMS gateway error:', smsRes.status, text);
-          return NextResponse.json(
-            { error: 'Failed to send SMS', details: text },
-            { status: 502 }
-          );
-        }
-
-        return NextResponse.json({ status: 'bird detected, SMS sent' });
-      } catch (smsErr) {
-        console.error('SMS request failed:', smsErr);
-        return NextResponse.json({ error: 'SMS request failed' }, { status: 502 });
-      }
+    if (state.isManualRecording) {
+        console.warn(`[Webhook] Received request to record camera ${cameraId}, but it is in manual recording mode. Skipping.`);
+        return;
     }
 
-    // No birds detected, no SMS sent
-    return NextResponse.json({ status: 'no bird detected' });
-  } catch (err) {
-    console.error('Webhook handler error:', err);
-    return NextResponse.json({ error: 'Invalid JSON or server error' }, { status: 400 });
-  }
+    // If already recording, just extend the timer
+    if (state.isWebhookRecording && state.webhookRecordingProcess) {
+        console.log(`[Webhook] Received event for camera ${cameraId} while already recording. Extending duration.`);
+        const newTimer = setTimeout(() => stopWebhookRecording(cameraId), CLIP_DURATION_SECONDS * 1000);
+        setCameraWebhookRecordingProcess(cameraId, state.webhookRecordingProcess, newTimer);
+        return;
+    }
+
+    console.log(`[Webhook] Starting new recording for camera ${cameraId}.`);
+
+    const recordingsDir = path.join(process.cwd(), 'recordings', cameraId);
+    await fs.mkdir(recordingsDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-');
+    const outputPath = path.join(recordingsDir, `webhook-rec-${timestamp}.mp4`);
+
+    const ffmpegArgs = [
+        '-y',
+        '-i', rtspUrl,
+        // '-t' is removed, we control the duration now
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-f', 'mp4',
+        outputPath,
+    ];
+
+    const FFMPEG_PATH = resolveFfmpegPath();
+    console.log(`[Webhook] Spawning FFmpeg for camera ${cameraId}: ${FFMPEG_PATH} ${ffmpegArgs.join(' ')}`);
+
+    const ffmpegProcess = spawn(FFMPEG_PATH, ffmpegArgs);
+
+    const recordingTimer = setTimeout(() => stopWebhookRecording(cameraId), CLIP_DURATION_SECONDS * 1000);
+    setCameraWebhookRecordingProcess(cameraId, ffmpegProcess, recordingTimer);
+
+    ffmpegProcess.stderr.on('data', (data) => {
+        console.error(`[Webhook FFMPEG stderr ${cameraId}]: ${data}`);
+    });
+
+    ffmpegProcess.on('close', (code) => {
+        console.log(`[Webhook] FFmpeg process for camera ${cameraId} exited with code ${code}.`);
+        clearCameraWebhookRecordingProcess(cameraId); // Important to clear state and timers
+        if (code !== 0 && code !== null) { // SIGINT results in code null
+            console.error(`[Webhook] Recording failed for camera ${cameraId}. Exit code: ${code}`);
+        } else {
+            console.log(`[Webhook] Clip for ${cameraId} saved to ${outputPath}`);
+            generateThumbnail(outputPath);
+        }
+    });
+     ffmpegProcess.on('error', (err) => {
+        console.error(`[Webhook] Failed to start FFmpeg process for camera ${cameraId}:`, err);
+        clearCameraWebhookRecordingProcess(cameraId);
+    });
+}
+
+
+export async function POST(req: NextRequest) {
+    console.log(`[Webhook] --- Incoming request received at ${new Date().toISOString()} ---`);
+    try {
+        console.log('[Webhook] Attempting to parse JSON payload...');
+        const payload = await req.json();
+        console.log('[Webhook] Successfully parsed payload:', payload);
+
+        const { camera_id, event } = payload;
+        if (!camera_id) {
+            console.error('[Webhook] Rejecting request: camera_id is missing.');
+            return NextResponse.json({ error: 'camera_id is required' }, { status: 400 });
+        }
+        
+        console.log(`[Webhook] Received event '${event || 'unknown'}' for camera_id: ${camera_id}`);
+
+        const camera = CAMERAS.find(c => c.id === camera_id);
+        if (!camera) {
+            console.error(`[Webhook] Rejecting request: Camera with id ${camera_id} not found.`);
+            return NextResponse.json({ error: 'Camera not found' }, { status: 404 });
+        }
+        
+        // Don't wait for the recording to finish
+        startOrExtendWebhookRecording(camera);
+
+        return NextResponse.json({ success: true, message: 'Recording triggered or extended.' });
+
+    } catch (error) {
+        console.error('[Webhook] Error processing request. The request body may be malformed or empty.');
+        console.error('[Webhook] Raw Error:', error);
+        // Handle cases where body is not valid JSON
+        if (error instanceof SyntaxError) {
+             return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 });
+        }
+        return NextResponse.json({ error: 'Invalid request' }, { status: 500 });
+    }
 } 

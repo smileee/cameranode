@@ -1,29 +1,33 @@
-import { CAMERAS } from '../cameras.config';
-import CameraCard from '@/components/CameraCard';
+import { CAMERAS } from "@/cameras.config";
+import CameraCard from "@/components/CameraCard";
+import fs from 'fs/promises';
+import path from 'path';
 
-export default function Home() {
+async function getThumbnail(cameraId:string){
+  const screenshotsDir = path.join(process.cwd(),'screenshots',cameraId);
+  const recordingsDir = path.join(process.cwd(),'recordings',cameraId);
+  const readDir=async(dir:string)=>{try{return (await fs.readdir(dir)).filter(f=>f.endsWith('.jpg')).sort().reverse();}catch(e){return [];}};
+  let files = await readDir(screenshotsDir);
+  if(files.length>0) return `/api/media/${cameraId}/screenshots/${files[0]}`;
+  files = await readDir(recordingsDir);
+  if(files.length>0) return `/api/media/${cameraId}/recordings/${files[0]}`;
+  return null;
+}
+
+export default async function HomePage() {
+  const camerasWithThumb = await Promise.all(CAMERAS.map(async cam=>({
+     ...cam,
+     thumb: await getThumbnail(cam.id)
+  })));
   return (
-    <main className="min-h-screen w-full bg-background">
-      <div className="container mx-auto px-4 py-12 sm:py-16">
-        <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-foreground">Cameras</h1>
-            <p className="text-muted-foreground mt-2">Select a camera to view the latest recordings.</p>
+    <main className="min-h-screen w-full bg-black text-white">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold mb-8 text-center">Câmeras</h1>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {camerasWithThumb.map((camera) => (
+            <CameraCard key={camera.id} camera={camera} />
+          ))}
         </div>
-        
-        {CAMERAS.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8">
-                {CAMERAS.map((camera) => (
-                    <CameraCard key={camera.id} camera={camera} />
-                ))}
-            </div>
-        ) : (
-            <div className="col-span-full text-center p-8 border border-dashed border-border rounded-lg max-w-md mx-auto">
-              <h2 className="text-xl font-semibold text-foreground">No Cameras Configured</h2>
-              <p className="text-muted-foreground mt-2">
-                Please add a camera to the <code>cameras.config.ts</code> file to get started.
-              </p>
-            </div>
-        )}
       </div>
     </main>
   );

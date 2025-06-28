@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { CameraStatusProvider } from "@/components/CameraStatus";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Camera Node",
-  description: "RTSP Camera Stream and Recording System",
+  title: "CameraNode",
+  description: "Simple RTSP Recording and Streaming",
 };
 
 export default function RootLayout({
@@ -19,12 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <CameraStatusProvider>
-          {children}
-        </CameraStatusProvider>
-      </body>
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

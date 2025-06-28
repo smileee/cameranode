@@ -1,39 +1,65 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Script from 'next/script';
+import type { JSMpegPlayer } from '@/types/jsmpeg-player';
 
-export default function LiveStream() {
+const JSMPEG_SCRIPT_URL = "https://cdn.jsdelivr.net/gh/phoboslab/jsmpeg@b5799bf/jsmpeg.min.js";
+
+interface LiveStreamProps {
+  streamUrl: string;
+}
+
+export default function LiveStream({ streamUrl }: LiveStreamProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+  const playerRef = useRef<JSMpegPlayer | null>(null);
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [showButton, setShowButton] = useState(true);
+
   useEffect(() => {
-    if (!canvasRef.current) return;
-
-    // Load JSMpeg from CDN
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/jsmpeg-player@3.0.3/build/jsmpeg.min.js';
-    script.async = true;
-
-    script.onload = () => {
-      // @ts-ignore - JSMpeg is loaded from CDN
-      new JSMpeg.Player(`ws://localhost:9999`, {
-        canvas: canvasRef.current,
-        audio: false,
-        videoBufferSize: 1024*1024,
-        preserveDrawingBuffer: true,
-      });
-    };
-
-    document.body.appendChild(script);
+    if (isScriptLoaded && !showButton) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        playerRef.current = new window.JSMpeg.Player(streamUrl, {
+          canvas: canvas,
+          autoplay: true,
+        });
+      }
+    }
 
     return () => {
-      document.body.removeChild(script);
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
     };
-  }, []);
+  }, [isScriptLoaded, streamUrl, showButton]);
+
+  const handlePlayClick = () => {
+    setShowButton(false);
+  };
 
   return (
-    <canvas 
-      ref={canvasRef}
-      className="w-full h-full"
-    />
+    <div className="w-full h-full relative">
+      <Script 
+        src={JSMPEG_SCRIPT_URL}
+        onLoad={() => {
+          console.log("JSMpeg script loaded.");
+          setIsScriptLoaded(true);
+        }}
+      />
+      <canvas ref={canvasRef} className="w-full h-full"></canvas>
+      {showButton && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <button
+            onClick={handlePlayClick}
+            disabled={!isScriptLoaded}
+            className="px-8 py-4 bg-gray-600 text-white font-bold rounded-lg shadow-lg hover:bg-gray-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {isScriptLoaded ? 'Play Live Stream' : 'Loading Player...'}
+          </button>
+        </div>
+      )}
+    </div>
   );
-} 
+}
