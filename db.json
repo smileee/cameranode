@@ -1,0 +1,25 @@
+{
+  "webhooks": [
+    {
+      "receivedAt": "2025-06-27T23:39:23.822Z",
+      "payload": {
+        "timestamp_utc": "2025-06-27T23:39:23Z",
+        "timestamp_ny": "2025-06-27T18:39:23-05:00",
+        "timezone_note": "NY time is EST (UTC-5) and does not account for DST.",
+        "detected_objects_count": 1,
+        "detections": [
+          {
+            "object": "cow",
+            "confidence": 52,
+            "box_pixels": {
+              "xmin": 502,
+              "xmax": 557,
+              "ymin": 282,
+              "ymax": 335
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

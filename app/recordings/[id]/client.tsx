@@ -27,6 +27,7 @@ function RecordingsDisplay({ camera }: RecordingsClientProps) {
   const [recordings, setRecordings] = useState<RecordingsResponse | null>(null);
   const [selectedRecording, setSelectedRecording] = useState<RecordingItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectionIntent, setSelectionIntent] = useState<'first' | 'last' | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const currentPage = parseInt(searchParams.get('page') || '1', 10);
@@ -37,8 +38,9 @@ function RecordingsDisplay({ camera }: RecordingsClientProps) {
     ? recordings?.items.findIndex(item => item.video === selectedRecording.video) ?? -1
     : -1;
 
-  const isFirstVideo = selectedRecordingIndex === 0;
-  const isLastVideo = recordings ? selectedRecordingIndex === recordings.items.length - 1 : false;
+  const totalPages = recordings ? Math.ceil(recordings.total / recordings.size) : 1;
+  const isLastVideo = recordings ? (selectedRecordingIndex === recordings.items.length - 1 && currentPage === totalPages) : false;
+  const isFirstVideo = selectedRecordingIndex === 0 && currentPage === 1;
 
   useEffect(() => {
     fetch(`/api/recordings/${camera.id}?page=${currentPage}&size=${pageSize}`)
@@ -51,6 +53,12 @@ function RecordingsDisplay({ camera }: RecordingsClientProps) {
       .then((data) => {
         setError(null);
         setRecordings(data);
+
+        if (selectionIntent && data.items.length) {
+          const target = selectionIntent === 'first' ? data.items[0] : data.items[data.items.length - 1];
+          setSelectedRecording(target);
+          setSelectionIntent(null);
+        }
       })
       .catch((err) => {
         console.error('Failed to fetch recordings:', err);
@@ -69,15 +77,12 @@ function RecordingsDisplay({ camera }: RecordingsClientProps) {
     if (newIndex >= 0 && newIndex < recordings.items.length) {
       setSelectedRecording(recordings.items[newIndex]);
     } else {
-      // Logic to handle page change when reaching the end or beginning
       const nextPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
       const totalPages = Math.ceil((recordings.total || 0) / (recordings.size || 1));
 
       if (nextPage > 0 && nextPage <= totalPages) {
-        router.push(`/recordings/${camera.id}?page=${nextPage}&size=${pageSize}`);
-        // The modal will close, but the user will be on the new page.
-        // A more advanced implementation might pre-fetch and stay in the modal.
-        closeModal();
+        setSelectionIntent(direction === 'next' ? 'first' : 'last');
+        router.replace(`/recordings/${camera.id}?page=${nextPage}&size=${pageSize}`);
       }
     }
   };

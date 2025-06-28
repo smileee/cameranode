@@ -24,16 +24,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ message: 'Not enough recordings available to show the latest one.' }, { status: 404 });
     }
 
-    const latestVideoFile = files[1]; // penúltimo para player
+    const targetVideoFile = files[1]; // penúltimo para player
 
-    // encontrar a miniatura mais recente que já exista
-    let latestThumbFile = files.find(f => {
-      const thumbPath = path.join(process.cwd(),'thumbnails',params.id,f.replace('.mp4','.jpg'));
-      return fsSync.existsSync(thumbPath);
-    }) || latestVideoFile;
+    // Verifica se existe miniatura para o mesmo arquivo
+    const thumbPath = path.join(process.cwd(), 'thumbnails', params.id, targetVideoFile.replace('.mp4', '.jpg'));
+    const hasThumb = fsSync.existsSync(thumbPath);
 
-    const videoUrl = `/api/recordings/${params.id}/stream/${latestVideoFile}`;
-    const thumbUrl = `/api/thumbnails/${params.id}/${latestThumbFile.replace('.mp4', '.jpg')}`;
+    const videoUrl = `/api/recordings/${params.id}/stream/${targetVideoFile}`;
+    const thumbUrl = hasThumb ? `/api/thumbnails/${params.id}/${targetVideoFile.replace('.mp4', '.jpg')}` : '';
 
     return NextResponse.json({ videoUrl, thumbUrl });
 
