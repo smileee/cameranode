@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { IconStar, IconDownload, IconInfoCircle, IconStarFilled, IconBell } from '@tabler/icons-react';
+import { IconStar, IconDownload, IconInfoCircle, IconStarFilled } from '@tabler/icons-react';
 
 interface Event {
     type: string;
@@ -122,70 +122,73 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
     return (
         <>
             <section>
-                <h2 className="text-2xl font-semibold mb-4 border-b border-gray-900 pb-2">Mídia Recente</h2>
-                {items.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
-                        {items.map(item => {
-                            const thumbnailUrl = `/api/media/${item.thumbnail}`;
-                            const mediaUrl = `/api/media/${item.id}`;
-                            
-                            const friendlyName = (() => {
-                                // Strip prefix and extension for readability
-                                let base = item.fileName.replace(/^webhook-rec-/, '').replace(/\.jpg$|\.mp4$/,'');
-                                return base.replace(/-/g, ' ');
-                            })();
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                    {items.map(item => {
+                        const thumbnailUrl = `/api/media/${item.thumbnail}`;
+                        const mediaUrl = `/api/media/${item.id}`;
+                        
+                        const friendlyName = (
+                            item.events[0]?.label || 
+                            (item.events[0]?.type ? item.events[0].type.replace(/_/g, ' ') : null) || 
+                            'Recording'
+                        );
 
-                            const renderMedia = () => (
-                                <div className="group relative bg-gray-800 rounded-lg overflow-hidden shadow-lg h-full flex flex-col">
-                                    <div className="relative cursor-pointer" onClick={() => item.video && setModalVideoUrl(mediaUrl)}>
-                                        <Image
-                                            src={thumbnailUrl}
-                                            alt={`Thumbnail for ${item.fileName}`}
-                                            width={400}
-                                            height={225}
-                                            className="w-full h-auto object-cover aspect-video"
-                                            unoptimized // Since they are served locally
-                                        />
-                                        {item.video && (
-                                            <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path></svg>
-                                            </div>
-                                        )}
+                        const renderMedia = () => (
+                            <div className="group relative bg-neutral-900 rounded-lg overflow-hidden shadow-lg border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 flex flex-col">
+                                <div className="relative cursor-pointer" onClick={() => item.video && setModalVideoUrl(mediaUrl)}>
+                                    <Image
+                                        src={thumbnailUrl}
+                                        alt={`Thumbnail for ${item.fileName}`}
+                                        width={400}
+                                        height={225}
+                                        className="w-full h-auto object-cover aspect-video"
+                                        unoptimized
+                                    />
+                                    
+                                    {item.events && item.events.length > 0 && (
+                                        <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                                            item.events[0].type.startsWith('audio')
+                                                ? 'bg-green-900/80 text-green-300 border-green-700'
+                                                : 'bg-blue-900/80 text-blue-300 border-blue-700'
+                                        }`}>
+                                            {(item.events[0].label || (item.events[0].type.startsWith('audio') ? 'AUDIO' : 'MOTION')).toUpperCase()}
+                                        </span>
+                                    )}
+                                    
+                                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                                        <h3 className="text-white font-semibold capitalize truncate">{friendlyName}</h3>
+                                        <p className="text-sm text-neutral-400">{item.formattedDate}</p>
                                     </div>
-                                    <div className="p-3 flex flex-col flex-grow">
-                                        <p className="text-xs text-gray-400 truncate" title={item.fileName}>{friendlyName}</p>
-                                        <p className="text-xs text-gray-500 mt-1 flex-grow">{item.formattedDate}</p>
-                                        <div className="flex items-center justify-end space-x-2 mt-2 text-gray-400">
-                                            {item.events && item.events.length > 0 && (
-                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${item.events[0].type.startsWith('audio') ? 'bg-green-600' : 'bg-blue-600'}`}
-                                                >{item.events[0].type.startsWith('audio') ? 'AUDIO' : 'MOTION'}</span>
-                                            )}
-                                            <button title="Info" className="hover:text-white transition-colors" onClick={()=>setInfoModalData({fileName:item.fileName,events:item.events})}>
+
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                        {item.video && (
+                                            <svg className="w-16 h-16 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path></svg>
+                                        )}
+                                        <div className="absolute bottom-3 right-3 flex items-center space-x-2">
+                                            <button title="Info" className="p-2 rounded-full bg-black/50 hover:bg-white/20 text-white transition-colors" onClick={(e) => { e.stopPropagation(); setInfoModalData({fileName:item.fileName,events:item.events})}}>
                                                 <IconInfoCircle size={20} />
                                             </button>
                                             <button 
                                                 title={item.isFavorite ? "Unfavorite" : "Favorite"} 
-                                                className="hover:text-white transition-colors"
-                                                onClick={() => handleFavoriteToggle(item.id, item.isFavorite)}
+                                                className="p-2 rounded-full bg-black/50 hover:bg-white/20 text-white transition-colors"
+                                                onClick={(e) => { e.stopPropagation(); handleFavoriteToggle(item.id, item.isFavorite); }}
                                             >
-                                                {item.isFavorite ? <IconStarFilled size={20} className="text-yellow-500" /> : <IconStar size={20} />}
+                                                {item.isFavorite ? <IconStarFilled size={20} className="text-yellow-400" /> : <IconStar size={20} />}
                                             </button>
-                                            <a href={mediaUrl} download title="Download" className="hover:text-white transition-colors">
+                                            <a href={mediaUrl} download title="Download" className="p-2 rounded-full bg-black/50 hover:bg-white/20 text-white transition-colors" onClick={(e) => e.stopPropagation()}>
                                                 <IconDownload size={20} />
                                             </a>
                                         </div>
                                     </div>
                                 </div>
-                            );
+                            </div>
+                        );
 
-                            return item.video 
-                                ? <div key={item.thumbnail}>{renderMedia()}</div>
-                                : <a key={item.thumbnail} href={thumbnailUrl} target="_blank" rel="noopener noreferrer">{renderMedia()}</a>;
-                        })}
-                    </div>
-                ) : (
-                    <p className="text-gray-400">Nenhuma mídia encontrada.</p>
-                )}
+                        return item.video 
+                            ? <div key={item.thumbnail}>{renderMedia()}</div>
+                            : <a key={item.thumbnail} href={thumbnailUrl} target="_blank" rel="noopener noreferrer">{renderMedia()}</a>;
+                    })}
+                </div>
                  <PaginationControls />
             </section>
             
@@ -202,20 +205,20 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
 
             {infoModalData && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50" onClick={()=>setInfoModalData(null)}>
-                    <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full text-white" onClick={e=>e.stopPropagation()}>
+                    <div className="bg-neutral-800 rounded-lg p-6 max-w-sm w-full text-white border border-neutral-700" onClick={e=>e.stopPropagation()}>
                         <h3 className="text-lg font-semibold mb-2">Informações do Arquivo</h3>
-                        <p className="break-all text-sm mb-4">{infoModalData.fileName}</p>
+                        <p className="break-all text-sm mb-4 text-neutral-300 font-mono">{infoModalData.fileName}</p>
                         {infoModalData.events.length>0 && (
                             <div>
-                                <p className="text-sm font-semibold mb-1">Eventos:</p>
-                                <ul className="list-disc list-inside text-sm">
+                                <p className="text-sm font-semibold mb-1 text-white">Eventos Detectados:</p>
+                                <ul className="list-disc list-inside text-sm text-neutral-300">
                                     {infoModalData.events.map((ev,idx)=>(
-                                       <li key={idx}>{ev.type}{ev.label?`: ${ev.label}`:''}</li>
+                                       <li key={idx} className="capitalize">{ev.type.replace(/_/g, ' ')}{ev.label?`: ${ev.label}`:''}</li>
                                     ))}
                                 </ul>
                             </div>
                         )}
-                        <button className="mt-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1 rounded" onClick={()=>setInfoModalData(null)}>Fechar</button>
+                        <button className="mt-6 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded transition-colors" onClick={()=>setInfoModalData(null)}>Fechar</button>
                     </div>
                 </div>
             )}

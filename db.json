@@ -193,6 +193,27 @@
       "cameraId": "8d5f31df",
       "type": "motion_detected",
       "timestamp": "2025-06-29T02:31:09.976Z"
+    },
+    {
+      "cameraId": "8d5f31df",
+      "type": "audio_detected",
+      "label": "Goose",
+      "timestamp": "2025-06-29T02:35:50.874Z"
+    },
+    {
+      "cameraId": "8d5f31df",
+      "type": "motion_detected",
+      "timestamp": "2025-06-29T02:36:52.238Z"
+    },
+    {
+      "cameraId": "8d5f31df",
+      "type": "motion_detected",
+      "timestamp": "2025-06-29T02:37:53.132Z"
+    },
+    {
+      "cameraId": "8d5f31df",
+      "type": "motion_detected",
+      "timestamp": "2025-06-29T02:38:54.269Z"
     }
   ]
 }

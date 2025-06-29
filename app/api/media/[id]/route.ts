@@ -30,7 +30,14 @@ async function getMediaFiles(cameraId: string, page: number, limit: number) {
 
     const allThumbnails = allFiles
         .filter(file => file.name.endsWith('.jpg'))
-        .sort((a, b) => b.name.localeCompare(a.name));
+        .sort((a, b) => {
+            const dateA = parseDateFromFilename(a.name);
+            const dateB = parseDateFromFilename(b.name);
+            if (dateA && dateB) {
+                return dateB.getTime() - dateA.getTime();
+            }
+            return b.name.localeCompare(a.name); // Fallback
+        });
 
     const totalItems = allThumbnails.length;
     const totalPages = Math.ceil(totalItems / limit);
