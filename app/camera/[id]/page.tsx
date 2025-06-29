@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { CAMERAS } from '@/cameras.config';
+import { getEventsForCamera } from '@/server/db';
 import CameraClientPage from './client';
 
 export default async function CameraPage({ params }: { params: { id: string } }) {
@@ -9,5 +10,7 @@ export default async function CameraPage({ params }: { params: { id: string } })
     notFound();
   }
 
-  return <CameraClientPage camera={camera} />;
+  const events = await getEventsForCamera(params.id);
+
+  return <CameraClientPage camera={camera} events={events} />;
 }

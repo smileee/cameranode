@@ -1,100 +1,83 @@
 'use client';
 
-import { useState } from 'react';
-import LiveStream from '@/components/LiveStream';
 import { Camera } from '@/cameras.config';
 import Link from 'next/link';
+import { IconArrowLeft, IconPhoto, IconWalk, IconVolume, IconPointFilled } from '@tabler/icons-react';
+import { formatInTimeZone } from 'date-fns-tz';
 
-export default function CameraClientPage({ camera }: { camera: Camera }) {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTogglingRecording, setIsTogglingRecording] = useState(false);
-  const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
+interface Event {
+    cameraId: string;
+    timestamp: string;
+    type: string;
+    label?: string;
+}
 
-  const streamUrl = `ws://localhost:8082/${camera.id}`;
+interface CameraClientPageProps {
+    camera: Camera;
+    events: Event[];
+}
 
-  const handleScreenshot = async () => {
-    setIsTakingScreenshot(true);
-    try {
-      const response = await fetch(`/api/camera/${camera.id}/screenshot`, {
-        method: 'POST',
-      });
-      const result = await response.json();
-      if (response.ok) {
-        alert('Screenshot salvo com sucesso!');
-      } else {
-        alert(`Erro ao tirar screenshot: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Error taking screenshot:', error);
-      alert('Ocorreu um erro de rede ao tirar o screenshot.');
-    } finally {
-      setIsTakingScreenshot(false);
+const EventIcon = ({ type }: { type: string }) => {
+    switch (type) {
+        case 'motion':
+        case 'motion_detected':
+            return <IconWalk size={18} />;
+        case 'audio':
+        case 'audio_detected':
+            return <IconVolume size={18} />;
+        default:
+            return <IconPointFilled size={18} />;
     }
-  };
+}
 
-  const handleToggleRecording = async () => {
-    setIsTogglingRecording(true);
-    const action = isRecording ? 'stop' : 'start';
-    try {
-        const response = await fetch(`/api/camera/${camera.id}/record`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action }),
-        });
-        const result = await response.json();
-        if (response.ok) {
-            setIsRecording(!isRecording);
-            alert(`Gravação ${action === 'start' ? 'iniciada' : 'parada'} com sucesso!`);
-        } else {
-            alert(`Erro: ${result.error}`);
-        }
-    } catch (error) {
-        console.error('Error toggling recording:', error);
-        alert('Ocorreu um erro de rede ao controlar a gravação.');
-    } finally {
-        setIsTogglingRecording(false);
-    }
-  };
-
+export default function CameraClientPage({ camera, events }: CameraClientPageProps) {
   return (
-    <main className="min-h-screen w-full bg-black text-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <Link href="/" className="text-gray-400 hover:text-gray-300">
-            &larr; Voltar para Câmeras
-          </Link>
-        </div>
-        <h1 className="text-4xl font-bold mb-4">{camera.name}</h1>
-        <div className="aspect-video w-full max-w-4xl mx-auto bg-black rounded-lg overflow-hidden shadow-lg">
-          <LiveStream streamUrl={streamUrl} />
-        </div>
-        <div className="mt-6 max-w-4xl mx-auto flex flex-wrap gap-4 justify-center">
-          <button
-            onClick={handleScreenshot}
-            disabled={isTakingScreenshot || isTogglingRecording}
-            className="bg-black hover:bg-gray-600/10 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isTakingScreenshot ? 'Capturando...' : 'Tirar Screenshot'}
-          </button>
-          <button
-            onClick={handleToggleRecording}
-            disabled={isTogglingRecording || isTakingScreenshot}
-            className={`${
-              isRecording
-                ? 'bg-red-700 hover:bg-red-600'
-                : 'bg-gray-700 hover:bg-gray-600'
-            } text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {isTogglingRecording ? (isRecording ? 'Parando...' : 'Iniciando...') : (isRecording ? 'Parar Gravação' : 'Iniciar Gravação')}
-          </button>
-          <Link
-            href={`/camera/${camera.id}/library`}
-            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors"
-          >
-            Biblioteca
-          </Link>
-        </div>
-      </div>
-    </main>
+    <div className="bg-background min-h-screen text-foreground">
+        <main className="container mx-auto p-4 md:p-8">
+            <header className="flex items-center justify-between mb-8">
+                <div>
+                    <Link href="/" className="flex items-center text-muted-foreground hover:text-foreground transition-colors text-sm mb-1">
+                        <IconArrowLeft size={16} className="mr-2" />
+                        Todas as Câmeras
+                    </Link>
+                    <h1 className="text-4xl font-bold tracking-tight">{camera.name}</h1>
+                </div>
+                <Link href={`/camera/${camera.id}/library`} className="btn btn-ghost">
+                    <IconPhoto size={18} className="mr-2" />
+                    Ver Biblioteca
+                </Link>
+            </header>
+
+            <div className="bg-card border border-border rounded-lg p-2">
+                <div className="w-full">
+                    <div className="px-4 py-2 border-b border-border grid grid-cols-[auto,1fr,auto] gap-4 items-center">
+                        <div className="text-muted-foreground font-medium text-sm">Evento</div>
+                        <div></div>
+                        <div className="text-muted-foreground font-medium text-sm text-right">Data</div>
+                    </div>
+                    {events.length > 0 ? (
+                        <div className="divide-y divide-border">
+                            {events.map((event) => (
+                                <div key={event.timestamp} className="px-4 py-3 grid grid-cols-[auto,1fr,auto] gap-4 items-center hover:bg-secondary transition-colors">
+                                    <div className="text-muted-foreground"><EventIcon type={event.type} /></div>
+                                    <div className="font-medium text-foreground capitalize">
+                                        {event.type.replace(/_/g, ' ')}
+                                        {event.label && <span className="text-muted-foreground ml-2 font-normal">{event.label}</span>}
+                                    </div>
+                                    <div className="text-muted-foreground text-sm text-right font-mono">
+                                        {formatInTimeZone(new Date(event.timestamp), 'America/New_York', 'MMM dd, hh:mm:ss a')}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 text-muted-foreground">
+                            <p>Nenhum evento registrado para esta câmera.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </main>
+    </div>
   );
 } 

@@ -92,21 +92,19 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
         
         return (
             <div className="flex justify-center items-center space-x-4 mt-8">
-                {currentPage > 1 && (
-                    <Link href={`${pathname}?page=${currentPage - 1}`} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                        &larr; Anterior
-                    </Link>
-                )}
+                <Link href={`${pathname}?page=${currentPage - 1}`} 
+                      className={`btn btn-ghost ${currentPage <= 1 ? 'opacity-50 pointer-events-none' : ''}`}>
+                    &larr; Anterior
+                </Link>
                 
-                <span className="text-gray-400">
+                <span className="text-muted-foreground">
                     Página {currentPage} de {totalPages}
                 </span>
 
-                {currentPage < totalPages && (
-                     <Link href={`${pathname}?page=${currentPage + 1}`} className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                        Próxima &rarr;
-                    </Link>
-                )}
+                <Link href={`${pathname}?page=${currentPage + 1}`} 
+                      className={`btn btn-ghost ${currentPage >= totalPages ? 'opacity-50 pointer-events-none' : ''}`}>
+                    Próxima &rarr;
+                </Link>
             </div>
         );
     };
@@ -146,11 +144,7 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
                                     />
                                     
                                     {item.events && item.events.length > 0 && (
-                                        <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full border ${
-                                            item.events[0].type.startsWith('audio')
-                                                ? 'bg-green-900/80 text-green-300 border-green-700'
-                                                : 'bg-blue-900/80 text-blue-300 border-blue-700'
-                                        }`}>
+                                        <span className="absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full border bg-background/80 text-foreground border-border">
                                             {(item.events[0].label || (item.events[0].type.startsWith('audio') ? 'AUDIO' : 'MOTION')).toUpperCase()}
                                         </span>
                                     )}

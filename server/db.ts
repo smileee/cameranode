@@ -76,6 +76,13 @@ class LowDBAdapter {
           return eventDate >= videoStartDate && eventDate <= videoEndDate;
       });
   }
+
+  async getEventsForCamera(cameraId: string): Promise<Event[]> {
+    await this.initializationPromise;
+    return this.db.data.events
+        .filter(event => event.cameraId === cameraId)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
 }
 
 function parseDateFromFilename(filename: string): Date | null {
@@ -95,4 +102,5 @@ const dbInstance = new LowDBAdapter();
 export const getMediaMetadata = dbInstance.getMediaMetadata.bind(dbInstance);
 export const setFavorite = dbInstance.setFavorite.bind(dbInstance);
 export const addEvent = dbInstance.addEvent.bind(dbInstance);
-export const getEventsForVideo = dbInstance.getEventsForVideo.bind(dbInstance); 
+export const getEventsForVideo = dbInstance.getEventsForVideo.bind(dbInstance);
+export const getEventsForCamera = dbInstance.getEventsForCamera.bind(dbInstance); 
