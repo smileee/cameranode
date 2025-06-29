@@ -72,7 +72,7 @@ export default function CameraClientPage({ camera }: { camera: Camera }) {
           <button
             onClick={handleScreenshot}
             disabled={isTakingScreenshot || isTogglingRecording}
-            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-black hover:bg-gray-600/10 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isTakingScreenshot ? 'Capturando...' : 'Tirar Screenshot'}
           </button>

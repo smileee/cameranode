@@ -1,3 +1,5 @@
+import { promises as fsp } from 'fs';
+import path from 'path';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { spawn, ChildProcess } from 'child_process';
@@ -14,6 +16,18 @@ const server = createServer();
 const wss = new WebSocketServer({ server });
 
 console.log(`[STREAMER] WebSocket streaming server starting on port ${STREAM_PORT}`);
+
+// Ensure a recordings directory exists for every camera at startup
+(async () => {
+  for (const cam of CAMERAS) {
+    const dir = path.join(process.cwd(), 'recordings', cam.id);
+    try {
+      await fsp.mkdir(dir, { recursive: true });
+    } catch (err) {
+      console.error(`[STREAMER] Failed to create recordings directory for camera ${cam.id}:`, err);
+    }
+  }
+})();
 
 wss.on('connection', (ws: WebSocket, req) => {
   const url = req.url || '/';

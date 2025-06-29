@@ -72,11 +72,13 @@ export function clearCameraWebhookRecordingProcess(cameraId: string) {
 
 export function stopCameraWebhookRecordingProcess(cameraId: string) {
     const state = getCameraState(cameraId);
-    if (state.webhookRecordingProcess) {
-        console.log(`[State] Stopping webhook recording for camera ${cameraId}`);
-        state.webhookRecordingProcess.kill('SIGINT');
+    if (state.webhookRecordingProcess && state.webhookRecordingProcess.stdin) {
+        console.log(`[State] Gracefully stopping webhook recording for camera ${cameraId} by sending 'q'`);
+        // We write 'q' to stdin to tell ffmpeg to close the output file gracefully.
+        state.webhookRecordingProcess.stdin.write('q');
     } else {
         console.log(`[State] No webhook recording process to stop for camera ${cameraId}. Clearing state.`);
+        // If the process or stdin is not available, we just clear the state.
         clearCameraWebhookRecordingProcess(cameraId);
     }
 }
