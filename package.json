@@ -8,7 +8,9 @@
     "dev:streamer": "ts-node --project tsconfig.server.json server/streamer.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "pm2:start": "pm2 start npm --name \"border-camera\" -- run dev",
+    "pm2:restart": "pm2 restart border-camera"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.34.0",
