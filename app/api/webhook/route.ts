@@ -48,6 +48,41 @@ async function startNewWebhookRecording(camera: (typeof CAMERAS)[0], eventInfo: 
     });
 }
 
+async function sendSmsNotification(cameraName: string, eventInfo: { type: string, label?: string }) {
+    const eventDescription = eventInfo.label ? `${eventInfo.type} (${eventInfo.label})` : eventInfo.type;
+    const message = `Camera ${cameraName}: ${eventDescription} detected.`;
+    const phoneNumbers = ["+17743010298", "+5084153606"];
+
+    const payload = {
+        messages: phoneNumbers.map(number => ({
+            number,
+            message
+        }))
+    };
+
+    try {
+        console.log(`[SMS] Sending notification for ${eventDescription} on camera ${cameraName}`);
+        const response = await fetch('https://gateway-pool.sendeasy.pro/bulk-sms', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': '08164ddd-61aa-4c7b-8faa-e24ba7e3bfe0',
+                'Authorization': 'Bearer 08164ddd-61aa-4c7b-8faa-e24ba7e3bfe0'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            console.log('[SMS] Notification sent successfully.');
+        } else {
+            const errorBody = await response.text();
+            console.error(`[SMS] Failed to send notification: ${response.status} ${response.statusText}`, errorBody);
+        }
+    } catch (error) {
+        console.error('[SMS] Error sending notification:', error);
+    }
+}
+
 export async function POST(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const cameraId = searchParams.get('id');
@@ -74,6 +109,9 @@ export async function POST(req: NextRequest) {
     
     // Save event to DB (fire-and-forget)
     addEvent({ cameraId, ...eventData }).catch(err => console.error('[WEBHOOK DB] Failed to save event:', err));
+
+    // Send SMS notification (fire-and-forget)
+    sendSmsNotification(camera.name, eventData).catch(err => console.error('[SMS] Failed to send notification:', err));
 
     const state = getCameraState(cameraId);
     if (state.isWebhookRecording && state.webhookRecordingProcess && state.webhookRecordingTimer) {
