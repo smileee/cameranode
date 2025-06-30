@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { IconStar, IconDownload, IconInfoCircle, IconStarFilled } from '@tabler/icons-react';
+import { IconStar, IconDownload, IconInfoCircle, IconStarFilled, IconPlayerPlayFilled } from '@tabler/icons-react';
 
 interface Event {
     type: string;
@@ -144,7 +144,7 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
                                     />
                                     
                                     {item.events && item.events.length > 0 && (
-                                        <span className="absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full border bg-background/80 text-foreground border-border">
+                                        <span className="absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full border bg-white text-black border-black">
                                             {(item.events[0].label || (item.events[0].type.startsWith('audio') ? 'AUDIO' : 'MOTION')).toUpperCase()}
                                         </span>
                                     )}
@@ -156,7 +156,9 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
 
                                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                         {item.video && (
-                                            <svg className="w-16 h-16 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path></svg>
+                                            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white drop-shadow-lg">
+                                                <IconPlayerPlayFilled size={32} className="text-black" />
+                                            </div>
                                         )}
                                         <div className="absolute bottom-3 right-3 flex items-center space-x-2">
                                             <button title="Info" className="p-2 rounded-full bg-black/50 hover:bg-white/20 text-white transition-colors" onClick={(e) => { e.stopPropagation(); setInfoModalData({fileName:item.fileName,events:item.events})}}>
