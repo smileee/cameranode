@@ -10,12 +10,12 @@ interface Event {
     timestamp: string;
     type: string;
     label?: string;
-}
+      }
 
 interface CameraClientPageProps {
     camera: Camera;
     events: Event[];
-}
+    }
 
 const EventIcon = ({ type }: { type: string }) => {
     switch (type) {
@@ -27,7 +27,7 @@ const EventIcon = ({ type }: { type: string }) => {
             return <IconVolume size={18} />;
         default:
             return <IconPointFilled size={18} />;
-    }
+        }
 }
 
 export default function CameraClientPage({ camera, events }: CameraClientPageProps) {
@@ -45,7 +45,7 @@ export default function CameraClientPage({ camera, events }: CameraClientPagePro
                 <Link href={`/camera/${camera.id}/library`} className="btn btn-ghost">
                     <IconPhoto size={18} className="mr-2" />
                     Ver Biblioteca
-                </Link>
+          </Link>
             </header>
 
             <div className="bg-card border border-border rounded-lg p-2">
@@ -69,15 +69,15 @@ export default function CameraClientPage({ camera, events }: CameraClientPagePro
                                     </div>
                                 </div>
                             ))}
-                        </div>
+        </div>
                     ) : (
                         <div className="text-center py-12 text-muted-foreground">
                             <p>Nenhum evento registrado para esta câmera.</p>
-                        </div>
+        </div>
                     )}
-                </div>
-            </div>
-        </main>
+        </div>
+      </div>
+    </main>
     </div>
   );
 } 

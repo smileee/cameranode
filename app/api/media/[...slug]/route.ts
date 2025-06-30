@@ -34,12 +34,12 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
             return new Response(buffer, { status: 206, headers });
 
         } else {
-            const fileBuffer = await fs.readFile(filePath);
+        const fileBuffer = await fs.readFile(filePath);
             const headers = new Headers();
             headers.set('Content-Length', totalSize.toString());
             headers.set('Content-Type', contentType);
             headers.set('Accept-Ranges', 'bytes');
-            
+        
             return new Response(fileBuffer, { status: 200, headers });
         }
 

@@ -80,7 +80,7 @@ export function stopCameraWebhookRecordingProcess(cameraId: string) {
         console.log(`[State] No webhook recording process to stop for camera ${cameraId}. Clearing state.`);
         // If the process or stdin is not available, we just clear the state.
         clearCameraWebhookRecordingProcess(cameraId);
-    }
+  }
 }
 
 // Keep streamer state separate

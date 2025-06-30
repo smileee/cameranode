@@ -16,7 +16,7 @@ async function getLatestThumbnail(cameraId: string): Promise<string | null> {
         return null;
     } catch (error) {
         // This will happen if the directory doesn't exist, which is fine.
-        return null;
+  return null;
     }
 }
 
@@ -36,9 +36,9 @@ export default async function HomePage() {
         <main>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {camerasWithThumbnails.map((camera) => (
-                <CameraCard key={camera.id} camera={camera} />
-              ))}
-            </div>
+            <CameraCard key={camera.id} camera={camera} />
+          ))}
+        </div>
         </main>
       </div>
     </div>

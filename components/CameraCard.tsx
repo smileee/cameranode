@@ -26,13 +26,13 @@ export default function CameraCard({ camera }: CameraCardProps) {
             objectFit="cover"
             className="transition-transform duration-200 group-hover:scale-105"
           />
-        ) : (
+      ) : (
           <div className="flex h-full w-full items-center justify-center bg-secondary">
             <span className="text-muted-foreground">Sem Sinal</span>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-      </div>
+        </div>
       <div className="mt-3">
         <h3 className="font-semibold text-foreground">{camera.name}</h3>
         <p className="text-sm text-muted-foreground">ID: {camera.id}</p>

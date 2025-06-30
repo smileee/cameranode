@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { CAMERAS } from '@/cameras.config';
-import { getCameraState, setCameraWebhookRecordingProcess, stopCameraWebhookRecordingProcess } from '@/server/state';
+import { getCameraState, setCameraWebhookRecordingProcess, stopCameraWebhookRecordingProcess, clearCameraWebhookRecordingProcess } from '@/server/state';
 import { addEvent } from '@/server/db';
 import { generateThumbnail } from '@/server/ffmpeg-utils';
 
@@ -40,7 +40,8 @@ async function startNewWebhookRecording(camera: (typeof CAMERAS)[0], eventInfo: 
             console.log(`[Webhook Thumbnail ${cameraId}]: Generating thumbnail for ${outputFilename}`);
             await generateThumbnail(outputPath);
         }
-        // clearCameraWebhookRecordingProcess is called by stopCameraWebhookRecordingProcess
+        // Ensure we clear the recording state after the process exits.
+        clearCameraWebhookRecordingProcess(cameraId);
     });
 
     ffmpegProcess.stderr.on('data', (data) => {

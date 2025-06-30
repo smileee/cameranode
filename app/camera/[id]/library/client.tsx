@@ -121,7 +121,7 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
         <>
             <section>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                    {items.map(item => {
+                        {items.map(item => {
                         const thumbnailUrl = `/api/media/${item.thumbnail}`;
                         const mediaUrl = `/api/media/${item.id}`;
                         
@@ -134,11 +134,11 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
                         const renderMedia = () => (
                             <div className="group relative bg-neutral-900 rounded-lg overflow-hidden shadow-lg border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 flex flex-col">
                                 <div className="relative cursor-pointer" onClick={() => item.video && setModalVideoUrl(mediaUrl)}>
-                                    <Image
-                                        src={thumbnailUrl}
+                                        <Image
+                                            src={thumbnailUrl}
                                         alt={`Thumbnail for ${item.fileName}`}
-                                        width={400}
-                                        height={225}
+                                            width={400}
+                                            height={225}
                                         className="w-full h-auto object-cover aspect-video"
                                         unoptimized
                                     />
@@ -175,14 +175,14 @@ export default function LibraryClient({ cameraId }: LibraryClientProps) {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
+                                    </div>
+                                );
 
                         return item.video 
                             ? <div key={item.thumbnail}>{renderMedia()}</div>
                             : <a key={item.thumbnail} href={thumbnailUrl} target="_blank" rel="noopener noreferrer">{renderMedia()}</a>;
-                    })}
-                </div>
+                        })}
+                    </div>
                  <PaginationControls />
             </section>
             
