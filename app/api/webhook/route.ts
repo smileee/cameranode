@@ -27,7 +27,6 @@ async function startNewWebhookRecording(camera: (typeof CAMERAS)[0], eventInfo: 
         '-i', camera.rtspUrl,
         '-c:v', 'copy',
         '-c:a', 'aac',
-        '-t', String(CLIP_DURATION_SECONDS + 10), // Record a bit longer just in case
         outputPath
     ]);
 
