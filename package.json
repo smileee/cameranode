@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "next lint",
     "pm2:start": "pm2 start npm --name \"border-camera\" -- run dev",
-    "pm2:restart": "pm2 restart border-camera"
+    "pm2:restart": "pm2 restart border-camera",
+    "pm2:start:prod": "pm2 start ecosystem.config.js",
+    "pm2:restart:prod": "pm2 restart ecosystem.config.js"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.34.0",
