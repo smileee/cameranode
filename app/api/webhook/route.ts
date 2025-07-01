@@ -8,6 +8,7 @@ import { addEvent } from '@/server/db';
 import { generateThumbnail } from '@/server/ffmpeg-utils';
 
 const CLIP_DURATION_SECONDS = 70;
+const HARD_LIMIT_MS = 5 * 60 * 1000; // 5 minutes max per file
 
 async function startNewWebhookRecording(camera: (typeof CAMERAS)[0], eventInfo: { type: string, label?: string }) {
     const cameraId = camera.id;
@@ -31,7 +32,7 @@ async function startNewWebhookRecording(camera: (typeof CAMERAS)[0], eventInfo: 
     ]);
 
     const timer = setTimeout(() => stopCameraWebhookRecordingProcess(cameraId), CLIP_DURATION_SECONDS * 1000);
-    setCameraWebhookRecordingProcess(cameraId, ffmpegProcess, timer);
+    setCameraWebhookRecordingProcess(cameraId, ffmpegProcess, timer, Date.now());
     
     ffmpegProcess.on('exit', async (code, signal) => {
         console.log(`[Webhook FFMPEG exit ${cameraId}]: process exited with code ${code} and signal ${signal}.`);
@@ -115,9 +116,20 @@ export async function POST(req: NextRequest) {
 
     const state = getCameraState(cameraId);
     if (state.isWebhookRecording && state.webhookRecordingProcess && state.webhookRecordingTimer) {
-        console.log(`[Webhook] Extending recording for camera ${cameraId}`);
-        const newTimer = setTimeout(() => stopCameraWebhookRecordingProcess(cameraId), CLIP_DURATION_SECONDS * 1000);
-        setCameraWebhookRecordingProcess(cameraId, state.webhookRecordingProcess, newTimer);
+        const now = Date.now();
+        const recordingElapsed = state.webhookRecordingStartedAt ? (now - state.webhookRecordingStartedAt) : 0;
+
+        // Se já ultrapassou o limite duro, fecha e inicia novo
+        if (recordingElapsed > HARD_LIMIT_MS) {
+            console.log(`[Webhook] Recording for camera ${cameraId} exceeded hard limit (${HARD_LIMIT_MS} ms). Restarting.`);
+            stopCameraWebhookRecordingProcess(cameraId);
+            // Pequeno atraso para garantir que o processo fecha antes de iniciar outro
+            setTimeout(() => startNewWebhookRecording(camera, eventData), 500);
+        } else {
+            console.log(`[Webhook] Extending recording for camera ${cameraId}`);
+            const newTimer = setTimeout(() => stopCameraWebhookRecordingProcess(cameraId), CLIP_DURATION_SECONDS * 1000);
+            setCameraWebhookRecordingProcess(cameraId, state.webhookRecordingProcess, newTimer);
+        }
     } else {
         startNewWebhookRecording(camera, eventData);
     }

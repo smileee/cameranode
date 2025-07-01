@@ -7,6 +7,7 @@ type CameraState = {
   manualRecordingProcess: ChildProcess | null;
   webhookRecordingProcess: ChildProcess | null;
   webhookRecordingTimer: NodeJS.Timeout | null;
+  webhookRecordingStartedAt: number | null;
 };
 
 const cameraStates = new Map<string, CameraState>();
@@ -19,6 +20,7 @@ function getInitialState(): CameraState {
     manualRecordingProcess: null,
     webhookRecordingProcess: null,
     webhookRecordingTimer: null,
+    webhookRecordingStartedAt: null,
   };
 }
 
@@ -45,7 +47,7 @@ export function clearCameraManualRecordingProcess(cameraId: string) {
   }
 }
 
-export function setCameraWebhookRecordingProcess(cameraId: string, process: ChildProcess, timer: NodeJS.Timeout) {
+export function setCameraWebhookRecordingProcess(cameraId: string, process: ChildProcess, timer: NodeJS.Timeout, startedAt: number | null = null) {
   const state = getCameraState(cameraId);
 
   if (state.webhookRecordingTimer) {
@@ -55,6 +57,9 @@ export function setCameraWebhookRecordingProcess(cameraId: string, process: Chil
   state.isWebhookRecording = true;
   state.webhookRecordingProcess = process;
   state.webhookRecordingTimer = timer;
+  if (startedAt !== null) {
+      state.webhookRecordingStartedAt = startedAt;
+  }
 }
 
 export function clearCameraWebhookRecordingProcess(cameraId: string) {
@@ -68,6 +73,7 @@ export function clearCameraWebhookRecordingProcess(cameraId: string) {
     clearTimeout(state.webhookRecordingTimer);
     state.webhookRecordingTimer = null;
   }
+  state.webhookRecordingStartedAt = null;
 }
 
 export function stopCameraWebhookRecordingProcess(cameraId: string) {
