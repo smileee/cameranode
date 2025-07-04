@@ -10,9 +10,9 @@ export const CAMERAS: Camera[] = [
     name: 'Backyard',
     rtspUrl: 'rtsp://192.168.9.231:554',
   },
-  // {
-  //   id: '2',
-  //   name: 'Driveway Cam',
-  //   rtspUrl: 'rtsp://...',
-  // },
+  {
+    id: '2',
+    name: 'Cam 2',
+    rtspUrl: 'rtsp://192.168.9.161:554',
+  },
 ]; 
