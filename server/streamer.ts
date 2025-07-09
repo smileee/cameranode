@@ -43,17 +43,17 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     // Store the process in the global state.
     setHlsStreamerProcess(cameraId, ffmpegProcess);
-
+    
     let buffer = '';
     ffmpegProcess.stderr.on('data', (data: Buffer) => {
         buffer += data.toString();
-        const lines = buffer.split('\n');
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || ''; // Keep the last partial line in the buffer
 
-        for (const line of lines) {
-            // Log the raw output for debugging, but only if it's not just whitespace.
-            if (line.trim()) {
-                console.error(`[FFMPEG_STDERR ${cameraId}]: ${line.trim()}`);
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (line) {
+                console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
             }
 
             // Check for the "Opening... for writing" message which indicates a new segment file.
