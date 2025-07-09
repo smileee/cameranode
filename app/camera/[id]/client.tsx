@@ -4,15 +4,17 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { IconStar, IconDownload, IconInfoCircle, IconStarFilled, IconPlayerPlayFilled, IconArrowLeft, IconPhotoOff, IconVideoOff } from '@tabler/icons-react';
+import { IconStar, IconDownload, IconInfoCircle, IconStarFilled, IconPlayerPlayFilled, IconArrowLeft, IconPhotoOff, IconVideoOff, IconMovie } from '@tabler/icons-react';
 import { Camera } from '@/cameras.config';
 import LiveStream from '@/components/LiveStream';
 
 // --- Types ---
 interface Event {
+    cameraId: string;
+    timestamp: string;
     type: string;
     label?: string;
-      }
+}
 
 interface MediaItem {
     id: string;
@@ -28,75 +30,50 @@ interface CameraClientPageProps {
     camera: Camera;
 }
 
-// A dedicated component for the media row to handle image loading state.
-function MediaTableRow({ item, onSelect }: { item: MediaItem, onSelect: (url: string) => void }) {
-    const [thumbError, setThumbError] = useState(false);
-    const thumbnailUrl = `/api/media/${item.thumbnail}`;
-    const mediaUrl = `/api/media/${item.id}`;
-    const friendlyName = item.events[0]?.label || item.events[0]?.type.replace(/_/g, ' ') || 'Recording';
-
+// --- Row for an Event ---
+function EventTableRow({ event, onGenerate, isGenerating }: { event: Event, onGenerate: (event: Event) => void, isGenerating: boolean }) {
     return (
-        <tr 
-            className="border-b border-neutral-800/80 hover:bg-neutral-800/60 transition-colors duration-200 cursor-pointer"
-            onClick={() => item.video && onSelect(mediaUrl)}
-        >
+        <tr className="border-b border-neutral-800/80">
             <td className="p-3">
                 <div className="w-28 h-[4.5rem] bg-neutral-800 rounded-md flex items-center justify-center">
-                    {thumbError ? (
-                        <IconPhotoOff size={24} className="text-neutral-500" />
-                    ) : (
-                        <Image 
-                            src={thumbnailUrl} 
-                            alt={`Thumbnail for ${item.fileName}`} 
-                            width={112} 
-                            height={72} 
-                            className="w-full h-full object-cover rounded-md" 
-                            unoptimized 
-                            onError={() => setThumbError(true)}
-                        />
-                    )}
+                    <IconMovie size={24} className="text-neutral-500" />
                 </div>
             </td>
             <td className="px-4 py-3 capitalize font-medium text-neutral-200">
-                {friendlyName}
+                {event.label || 'Event'}
             </td>
             <td className="px-4 py-3 text-xs text-neutral-400">
-                {item.formattedDate}
+                {new Date(event.timestamp).toLocaleString()}
+            </td>
+            <td className="px-4 py-3 text-right">
+                <button
+                    onClick={() => onGenerate(event)}
+                    disabled={isGenerating}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md disabled:bg-neutral-600 disabled:cursor-not-allowed"
+                >
+                    {isGenerating ? 'Generating...' : 'Generate Video'}
+                </button>
             </td>
         </tr>
     );
 }
 
 
-// --- Library Component (previously LibraryClient) ---
+// --- Library Component ---
 function Library({ cameraId }: { cameraId: string }) {
-    const [items, setItems] = useState<MediaItem[]>([]);
-    const [totalPages, setTotalPages] = useState(0);
+    const [events, setEvents] = useState<Event[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null);
-    const [infoModalData, setInfoModalData] = useState<{fileName:string; events:Event[]}|null>(null);
+    const [generatingEventId, setGeneratingEventId] = useState<string | null>(null);
     
-    const router = useRouter();
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
-    const currentPage = parseInt(searchParams.get('page') || '1', 10);
-
-    const createQueryString = useCallback((name: string, value: string) => {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set(name, value);
-        return params.toString();
-    }, [searchParams]);
-
-    const fetchMedia = useCallback(async (page: number) => {
+    const fetchEvents = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await fetch(`/api/media/${cameraId}?page=${page}&limit=12`);
-            if (!response.ok) throw new Error('Failed to fetch media');
+            const response = await fetch(`/api/events?cameraId=${cameraId}`);
+            if (!response.ok) throw new Error('Failed to fetch events');
             const data = await response.json();
-            setItems(data.mediaItems);
-            setTotalPages(data.totalPages);
+            setEvents(data);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -105,59 +82,72 @@ function Library({ cameraId }: { cameraId: string }) {
     }, [cameraId]);
 
     useEffect(() => {
-        fetchMedia(currentPage);
-    }, [currentPage, fetchMedia]);
+        fetchEvents();
+    }, [fetchEvents]);
 
-    const handleFavoriteToggle = async (filePath: string, currentStatus: boolean) => {
-        setItems(currentItems => currentItems.map(item => item.id === filePath ? { ...item, isFavorite: !currentStatus } : item));
+    const handleGenerateVideo = async (event: Event) => {
+        setGeneratingEventId(event.timestamp); // Use timestamp as a unique ID for the generation process
         try {
-            await fetch('/api/media/favorite', {
+            const response = await fetch(`/api/camera/${cameraId}/record`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filePath, isFavorite: !currentStatus }),
+                body: JSON.stringify({
+                    timestamp: event.timestamp,
+                    label: event.label,
+                }),
             });
-        } catch (error) {
-            console.error("Failed to update favorite status:", error);
-            setItems(currentItems => currentItems.map(item => item.id === filePath ? { ...item, isFavorite: currentStatus } : item));
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to generate video');
+            }
+
+            // For now, we can just alert the user. A better approach would be to
+            // switch to a "Recordings" tab or refresh a list of generated media.
+            alert('Video generated successfully! Refresh the page to see it in your library (feature coming soon).');
+
+        } catch (err: any) {
+            setError(err.message);
+            alert(`Error generating video: ${err.message}`);
+        } finally {
+            setGeneratingEventId(null);
+            // Optionally, refresh the events list or a recordings list here
         }
     };
 
     if (isLoading) return <div className="text-center p-8 text-muted-foreground">Loading media...</div>;
     if (error) return <div className="text-center p-8 text-red-500">Error: {error}</div>;
-    if (items.length === 0) return (
-        <div className="flex flex-col items-center justify-center h-full text-neutral-500">
-            <IconVideoOff size={48} />
-            <p className="mt-4 text-sm">No recordings found.</p>
-        </div>
-    );
     
     return (
         <div className="flex flex-col h-full">
-            <h2 className="text-2xl font-bold mb-4 px-1">Media Library</h2>
-            <div className="flex-grow overflow-y-auto pr-1">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-neutral-500 uppercase sticky top-0 bg-black/80 backdrop-blur-sm">
-                        <tr>
-                            <th scope="col" className="px-3 py-3">Thumb</th>
-                            <th scope="col" className="px-4 py-3">Event</th>
-                            <th scope="col" className="px-4 py-3">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.map(item => (
-                            <MediaTableRow key={item.id} item={item} onSelect={setModalVideoUrl} />
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            
-            {/* Modals */}
-            {modalVideoUrl && (
-                <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50" onClick={() => setModalVideoUrl(null)}>
-                    <div className="relative w-full max-w-4xl" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => setModalVideoUrl(null)} className="absolute -top-10 right-0 text-white text-3xl font-bold">&times;</button>
-                        <video className="w-full h-auto" src={modalVideoUrl} controls autoPlay>Your browser does not support the video tag.</video>
-                    </div>
+            <h2 className="text-2xl font-bold mb-4 px-1">Event History</h2>
+            {events.length === 0 ? (
+                 <div className="flex flex-col items-center justify-center h-full text-neutral-500">
+                    <IconVideoOff size={48} />
+                    <p className="mt-4 text-sm">No events found.</p>
+                </div>
+            ) : (
+                <div className="flex-grow overflow-y-auto pr-1">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-neutral-500 uppercase sticky top-0 bg-black/80 backdrop-blur-sm">
+                            <tr>
+                                <th scope="col" className="px-3 py-3">Thumb</th>
+                                <th scope="col" className="px-4 py-3">Event</th>
+                                <th scope="col" className="px-4 py-3">Date</th>
+                                <th scope="col" className="px-4 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {events.map(event => (
+                                <EventTableRow
+                                    key={event.timestamp}
+                                    event={event}
+                                    onGenerate={handleGenerateVideo}
+                                    isGenerating={generatingEventId === event.timestamp}
+                                />
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
         </div>
@@ -185,7 +175,7 @@ export default function CameraClientPage({ camera }: CameraClientPageProps) {
                     <div className="w-full h-full rounded-lg overflow-hidden border border-neutral-800">
                        <LiveStream src={liveStreamUrl} />
                     </div>
-                                    </div>
+                </div>
 
                 {/* Right Side: Media Library (1/3 width) */}
                 <aside className="w-1/3 h-full p-4 border-l border-neutral-800 flex flex-col">

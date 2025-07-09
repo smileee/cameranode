@@ -9,25 +9,23 @@ export interface HlsSegment {
 /**
  * Represents an active recording session triggered by a webhook.
  */
-type RecordingSession = {
-  isRecording: boolean;
-  // A list of all segment filenames (e.g., 'segment000123.ts') to be included in the final video.
-  segmentsToRecord: string[];
-  // The timer that will trigger the finalization of the recording.
-  finalizeTimeoutId: NodeJS.Timeout | null;
-  // The event label that triggered the recording.
-  label: string;
-};
+// This is no longer needed, as we are moving to on-demand recording.
+// type RecordingSession = {
+//   isRecording: boolean;
+//   segmentsToRecord: string[];
+//   finalizeTimeoutId: NodeJS.Timeout | null;
+//   label: string;
+// };
 
 
 // Defines the state for a single camera.
 type CameraState = {
   // The persistent ffmpeg process that generates the HLS stream.
   hlsStreamerProcess: ChildProcess | null;
-  // The queue of recent HLS segments, used as a pre-roll buffer.
+  // A buffer of recent HLS segments. This is used to construct recordings on-demand.
   hlsSegmentBuffer: HlsSegment[];
-  // State of the webhook-triggered recording, if active.
-  recordingSession: RecordingSession;
+  // The recording session state has been removed.
+  // recordingSession: RecordingSession;
 };
 
 // Ensure a single shared state across the entire Node.js process, even if the module
@@ -61,12 +59,12 @@ export function getCameraState(cameraId: string): CameraState {
     cameraStates.set(key, {
       hlsStreamerProcess: null,
       hlsSegmentBuffer: [],
-      recordingSession: {
-        isRecording: false,
-        segmentsToRecord: [],
-        finalizeTimeoutId: null,
-        label: 'default',
-      },
+      // recordingSession: {
+      //   isRecording: false,
+      //   segmentsToRecord: [],
+      //   finalizeTimeoutId: null,
+      //   label: 'default',
+      // },
     });
   }
   return cameraStates.get(key)!;
@@ -88,72 +86,21 @@ export function setHlsStreamerProcess(cameraId: string, process: ChildProcess) {
  * @param segment - The HLS segment information to add.
  * @param bufferSize - The maximum number of segments to keep in the buffer.
  */
-export function addHlsSegment(cameraId: string, segment: HlsSegment, bufferSize: number = 30) {
+export function addHlsSegment(cameraId: string, segment: HlsSegment, bufferSize: number = 150) { // Keep ~5 mins of footage (150 segs * 2s)
     const state = getCameraState(cameraId);
     state.hlsSegmentBuffer.push(segment);
-
-    // If a recording is active, add this new segment to the list.
-    if (state.recordingSession.isRecording) {
-        state.recordingSession.segmentsToRecord.push(segment.filename);
-    }
 
     // Keep the buffer from growing indefinitely.
     while (state.hlsSegmentBuffer.length > bufferSize) {
         state.hlsSegmentBuffer.shift();
     }
 
-    console.log(`[State ${cameraId}] Added segment ${segment.filename}. Pre-roll buffer size: ${state.hlsSegmentBuffer.length}. Recording segments: ${state.recordingSession.segmentsToRecord.length}.`);
+    console.log(`[State ${cameraId}] Added segment ${segment.filename}. Buffer size: ${state.hlsSegmentBuffer.length}.`);
 }
 
-const RECORDING_DURATION_MS = 75 * 1000; // 15s of pre-roll + 60s of recording.
 
-/**
- * Triggers a new, fixed-length recording session if one is not already active.
- * This function is designed to be simple and robust, creating one video per event trigger.
- * @param cameraId - The camera's ID.
- * @param label - The label for the event (e.g., 'person_detected').
- * @param finalizeCallback - The function to call when the recording is ready to be finalized.
- */
-export function triggerRecording(
-    cameraId: string, 
-    label: string,
-    finalizeCallback: (segments: string[], label: string) => void,
-) {
-    const state = getCameraState(cameraId);
-    const session = state.recordingSession;
-
-    // If a recording is already in progress, ignore the new trigger to prevent overlapping videos.
-    if (session.isRecording) {
-        console.log(`[State ${cameraId}] Trigger received for '${label}', but a recording is already in progress. Ignoring.`);
-        return;
-    }
-
-    // Start a new recording session.
-    console.log(`[State ${cameraId}] Starting new recording session for event: ${label}`);
-    session.isRecording = true;
-    session.label = label;
-    
-    // Immediately capture the current pre-roll buffer.
-    session.segmentsToRecord = state.hlsSegmentBuffer.map(s => s.filename);
-    console.log(`[State ${cameraId}] Captured ${session.segmentsToRecord.length} pre-roll segments.`);
-
-    // Set a non-extendable timer to finalize the recording after a fixed duration.
-    session.finalizeTimeoutId = setTimeout(() => {
-        console.log(`[State ${cameraId}] Finalizing recording for event: ${session.label}`);
-        
-        // Pass the collected segments and the label directly to the callback.
-        // This avoids race conditions where the state might be cleared before processing.
-        finalizeCallback([...session.segmentsToRecord], session.label);
-        
-        // Reset the session state after triggering the finalization.
-        session.isRecording = false;
-        session.segmentsToRecord = [];
-        session.finalizeTimeoutId = null;
-        session.label = 'default';
-    }, RECORDING_DURATION_MS);
-
-    console.log(`[State ${cameraId}] Recording will be finalized in ${RECORDING_DURATION_MS / 1000} seconds.`);
-}
+// The triggerRecording function has been removed. Webhooks now only log an event.
+// The frontend will be responsible for initiating the creation of a video file from the segments.
 
 /**
  * Kills all running ffmpeg processes for all cameras. Used for graceful shutdown.
