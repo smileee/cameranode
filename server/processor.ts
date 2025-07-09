@@ -84,7 +84,7 @@ async function processPendingEvents() {
                 await updateEvent(event.id, { status: 'processed', videoPath: 'error-segment-not-found' });
                 continue;
             }
-            
+
             // From the list of all available segments, find the index of our anchor.
             const allSegments = (await fs.readdir(liveDir))
                 .filter(f => f.endsWith('.ts'))
@@ -121,7 +121,10 @@ async function processPendingEvents() {
             console.log(`[Processor] Generating video for event ${event.id} at ${outputPath}`);
 
             try {
-                await concatenateSegments(segmentsToConcatenate, outputPath);
+                // We need to pass just the filenames, not the full path, to the concatenate function.
+                const segmentFileNames = segmentsToConcatenate.map(fullPath => path.basename(fullPath));
+                await concatenateSegments(segmentFileNames, liveDir, outputPath);
+                
                 await updateEvent(event.id, { status: 'processed', videoPath: outputPath });
                 console.log(`[Processor] Successfully generated video for event ${event.id}`);
             } catch (error) {
