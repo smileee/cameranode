@@ -30,7 +30,23 @@ type CameraState = {
   recordingSession: RecordingSession;
 };
 
-const cameraStates = new Map<string, CameraState>();
+// Ensure a single shared state across the entire Node.js process, even if the module
+// is duplicated by different bundling/require paths (which Next.js can do for app routes).
+// We attach it to the global object so every import gets the same reference.
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+const globalAny = globalThis as any;
+
+if (!globalAny.__CAMERANODE_CAMERA_STATES) {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  globalAny.__CAMERANODE_CAMERA_STATES = new Map<string, CameraState>();
+}
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+const cameraStates: Map<string, CameraState> = globalAny.__CAMERANODE_CAMERA_STATES;
 
 /**
  * Retrieves the current state for a given camera, initializing it if it doesn't exist.
