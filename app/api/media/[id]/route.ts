@@ -1,92 +1,43 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
+import { getEventsForCamera } from '@/server/db';
 import path from 'path';
-import { getMediaMetadata, getEventsForVideo } from '@/server/db';
-import { formatInTimeZone } from 'date-fns-tz';
+import fs from 'fs/promises';
 
-const parseDateFromFilename = (filename: string): Date | null => {
-    const match = filename.match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z)/);
-    if (match && match[1]) {
-        const [datePart, timePart] = match[1].split('T');
-        const correctedTimePart = timePart.replace(/-/g, ':');
-        return new Date(`${datePart}T${correctedTimePart}`);
-    }
-    return null;
-}
+const HLS_OUTPUT_DIR = 'recordings';
 
-async function getMediaFiles(cameraId: string, page: number, limit: number) {
-    const recordingsDir = path.join(process.cwd(), 'recordings', cameraId);
-
-    const readDir = async (dir: string) => {
-        try {
-            return await fs.readdir(dir);
-        } catch (error: any) {
-            if (error.code === 'ENOENT') return [];
-            throw error;
-        }
-    };
-    
-    const allFiles = (await readDir(recordingsDir)).map(f => ({ name: f, type: 'recording' }));
-
-    const allThumbnails = allFiles
-        .filter(file => file.name.endsWith('.jpg'))
-        .sort((a, b) => {
-            const dateA = parseDateFromFilename(a.name);
-            const dateB = parseDateFromFilename(b.name);
-            if (dateA && dateB) {
-                return dateB.getTime() - dateA.getTime();
-            }
-            return b.name.localeCompare(a.name); // Fallback
-        });
-
-    const totalItems = allThumbnails.length;
-    const totalPages = Math.ceil(totalItems / limit);
-    const offset = (page - 1) * limit;
-    
-    const paginatedThumbnails = allThumbnails.slice(offset, offset + limit);
-
-    const mediaItems = await Promise.all(paginatedThumbnails.map(async (thumb) => {
-        const fileBase = thumb.name.replace('.jpg', '');
-        const hasVideo = allFiles.some(f => f.name === `${fileBase}.mp4`);
-        
-        const thumbnailPath = path.join('recordings', cameraId, thumb.name);
-        const videoPath = hasVideo ? path.join('recordings', cameraId, `${fileBase}.mp4`) : null;
-        
-        const mediaId = videoPath || thumbnailPath;
-        const metadata = await getMediaMetadata(mediaId);
-        const events = await getEventsForVideo(mediaId);
-        
-        const date = parseDateFromFilename(thumb.name);
-        const isValidDate = date && !isNaN(date.getTime());
-
-        const formattedDate = isValidDate
-            ? formatInTimeZone(date, 'America/New_York', 'MMM dd, yyyy, hh:mm:ss a zzz')
-            : 'Date not found';
-
-        return {
-            id: mediaId,
-            thumbnail: thumbnailPath,
-            video: videoPath,
-            isFavorite: metadata.isFavorite,
-            events: events,
-            formattedDate: formattedDate,
-            fileName: thumb.name,
-        };
-    }));
-
-    return { mediaItems, totalPages, currentPage: page };
-}
-
+/**
+ * API route to get all processed media (recordings) for a specific camera.
+ */
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '8', 10);
-  
+    const cameraId = params.id;
+    if (!cameraId) {
+        return NextResponse.json({ error: 'Camera ID is required' }, { status: 400 });
+    }
+
     try {
-      const data = await getMediaFiles(params.id, page, limit);
-      return NextResponse.json(data);
+        // Fetch all events for the camera from the database
+        const allEvents = await getEventsForCamera(cameraId);
+
+        // Filter for events that have been successfully processed and have a video path
+        const processedRecordings = allEvents
+            .filter(event => event.status === 'processed' && event.videoPath && !event.videoPath.startsWith('error-'))
+            .map(event => {
+                const videoPath = event.videoPath!;
+                // Make the path relative to the project root so the client can fetch it.
+                const relativePath = path.relative(process.cwd(), videoPath);
+                
+                return {
+                    id: event.id,
+                    timestamp: event.timestamp,
+                    label: event.label,
+                    url: `/api/media/file/${encodeURIComponent(relativePath)}`,
+                    // We can add more metadata here if needed in the future
+                };
+            });
+
+        return NextResponse.json(processedRecordings);
     } catch (error) {
-      console.error('Failed to get media files:', error);
-      return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+        console.error(`[API Media] Error fetching recordings for camera ${cameraId}:`, error);
+        return NextResponse.json({ error: 'Failed to fetch recordings' }, { status: 500 });
     }
 } 

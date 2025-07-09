@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
 import { initializeCameraStreams } from './server/streamer';
+import { startProcessor } from './server/processor';
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -18,6 +19,11 @@ app.prepare().then(() => {
   // First, initialize the camera streams.
   console.log('[Server] Initializing background services...');
   initializeCameraStreams();
+
+  // Start the background processor for handling events
+  startProcessor();
+
+  console.log('Camera node server started successfully.');
 
   // Then, create the HTTP server for the Next.js app.
   createServer((req, res) => {

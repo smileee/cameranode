@@ -7,11 +7,41 @@ import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcess
 
 const HLS_OUTPUT_DIR = 'recordings';
 const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each video segment in seconds.
-// Keep enough segments so that the oldest pre-roll plus the full recording duration (≈105 s) are still on disk
-// when finalization happens. With 2 s segments, 120 entries ≈4 minutes of footage.
-const HLS_LIST_SIZE = 120;
+
+// Keep a large playlist so ffmpeg doesn't delete segments too early. 
+// 1 hour = 3600 seconds. 3600s / 2s/segment = 1800 segments. We'll use 2000 to be safe.
+const HLS_LIST_SIZE = 2000;
+const SEGMENT_BUFFER_RETENTION_MINUTES = 65; // Keep a little over an hour of segments on disk.
 const PRE_ROLL_BUFFER_SIZE = 30; // Number of segments to keep for pre-roll (e.g., 30 segments * 2s = 60s buffer).
 
+/**
+ * Periodically cleans up old HLS segment files for a given camera.
+ * @param cameraId The ID of the camera to clean up.
+ */
+async function cleanupOldSegments(cameraId: string) {
+    const liveDir = path.join(process.cwd(), HLS_OUTPUT_DIR, String(cameraId), 'live');
+    try {
+        const files = await fs.readdir(liveDir);
+        const now = Date.now();
+        const retentionMs = SEGMENT_BUFFER_RETENTION_MINUTES * 60 * 1000;
+
+        for (const file of files) {
+            if (file.endsWith('.ts')) {
+                const filePath = path.join(liveDir, file);
+                const stats = await fs.stat(filePath);
+                if (now - stats.mtime.getTime() > retentionMs) {
+                    await fs.unlink(filePath);
+                    console.log(`[Cleanup ${cameraId}] Deleted old segment: ${file}`);
+                }
+            }
+        }
+    } catch (error: any) {
+        // It's okay if the directory doesn't exist yet.
+        if (error.code !== 'ENOENT') {
+            console.error(`[Cleanup ${cameraId}] Error cleaning up old segments:`, error);
+        }
+    }
+}
 /**
  * Starts a persistent ffmpeg process for a single camera to generate an HLS stream.
  * @param camera - The camera configuration object.
@@ -37,8 +67,7 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-f', 'hls',
         '-hls_time', HLS_SEGMENT_DURATION_SECONDS.toString(),
         '-hls_list_size', HLS_LIST_SIZE.toString(),
-        // Keep all segments in the window; we don’t delete them automatically because they may be needed
-        // for a recording that is still being finalized. We still add program_date_time for accurate timelines.
+        // We manage segment deletion manually to ensure they exist for the processor.
         '-hls_flags', 'program_date_time',
         '-hls_segment_filename', path.join(liveDir, 'segment%06d.ts'), // e.g., segment000001.ts
         path.join(liveDir, 'live.m3u8'),
@@ -77,6 +106,10 @@ async function startHlsStreamForCamera(camera: Camera) {
             // console.log(`[Streamer ${cameraId}] No match: ${line}`);
         }
     });
+
+    // Start a periodic cleanup task for this camera's segments.
+    // Runs every 5 minutes.
+    setInterval(() => cleanupOldSegments(cameraId), 5 * 60 * 1000);
 
     ffmpegProcess.on('error', (err) => {
         console.error(`[FFMPEG_ERROR ${cameraId}] Process error:`, err);
