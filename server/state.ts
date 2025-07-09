@@ -6,14 +6,19 @@ export interface HlsSegment {
   startTime: number; // Unix timestamp (ms) when the segment started
 }
 
-type WebhookRecordingState = {
-  // Timer to automatically stop the recording after a certain duration.
-  stopTimer: NodeJS.Timeout;
-  // Unix timestamp (ms) when the recording was triggered.
-  startedAt: number;
-  // Path to the temporary .m3u8 playlist for this specific recording.
-  playlistPath: string;
+/**
+ * Represents an active recording session triggered by a webhook.
+ */
+type RecordingSession = {
+  isRecording: boolean;
+  // A list of all segment filenames (e.g., 'segment000123.ts') to be included in the final video.
+  segmentsToRecord: string[];
+  // The timer that will trigger the finalization of the recording.
+  finalizeTimeoutId: NodeJS.Timeout | null;
+  // The event label that triggered the recording.
+  label: string;
 };
+
 
 // Defines the state for a single camera.
 type CameraState = {
@@ -22,7 +27,7 @@ type CameraState = {
   // The queue of recent HLS segments, used as a pre-roll buffer.
   hlsSegmentBuffer: HlsSegment[];
   // State of the webhook-triggered recording, if active.
-  webhookRecording: WebhookRecordingState | null;
+  recordingSession: RecordingSession;
 };
 
 const cameraStates = new Map<string, CameraState>();
@@ -37,7 +42,12 @@ export function getCameraState(cameraId: string): CameraState {
     cameraStates.set(cameraId, {
       hlsStreamerProcess: null,
       hlsSegmentBuffer: [],
-      webhookRecording: null,
+      recordingSession: {
+        isRecording: false,
+        segmentsToRecord: [],
+        finalizeTimeoutId: null,
+        label: 'default',
+      },
     });
   }
   return cameraStates.get(cameraId)!;
@@ -63,36 +73,62 @@ export function addHlsSegment(cameraId: string, segment: HlsSegment, bufferSize:
     const state = getCameraState(cameraId);
     state.hlsSegmentBuffer.push(segment);
 
+    // If a recording is active, add this new segment to the list.
+    if (state.recordingSession.isRecording) {
+        state.recordingSession.segmentsToRecord.push(segment.filename);
+    }
+
     // Keep the buffer from growing indefinitely.
     while (state.hlsSegmentBuffer.length > bufferSize) {
         state.hlsSegmentBuffer.shift();
     }
 }
 
-/**
- * Starts or extends a webhook-triggered recording for a camera.
- * @param cameraId - The camera's ID.
- * @param recordingData - The state and timer for the recording.
- */
-export function setWebhookRecording(cameraId: string, recordingData: WebhookRecordingState) {
-  const state = getCameraState(cameraId);
-  // If there's an existing timer, clear it to extend the recording.
-  if (state.webhookRecording?.stopTimer) {
-    clearTimeout(state.webhookRecording.stopTimer);
-  }
-  state.webhookRecording = recordingData;
-}
+const RECORDING_DURATION_MS = 75 * 1000; // 15s of pre-roll + 60s of recording.
 
 /**
- * Clears the webhook recording state for a camera, typically after it finishes.
+ * Triggers a new, fixed-length recording session if one is not already active.
+ * This function is designed to be simple and robust, creating one video per event trigger.
  * @param cameraId - The camera's ID.
+ * @param label - The label for the event (e.g., 'person_detected').
+ * @param finalizeCallback - The function to call when the recording is ready to be finalized.
  */
-export function clearWebhookRecording(cameraId: string) {
-  const state = getCameraState(cameraId);
-  if (state.webhookRecording?.stopTimer) {
-    clearTimeout(state.webhookRecording.stopTimer);
-  }
-  state.webhookRecording = null;
+export function triggerRecording(
+    cameraId: string, 
+    label: string,
+    finalizeCallback: () => void,
+) {
+    const state = getCameraState(cameraId);
+    const session = state.recordingSession;
+
+    // If a recording is already in progress, ignore the new trigger to prevent overlapping videos.
+    if (session.isRecording) {
+        console.log(`[State ${cameraId}] Trigger received for '${label}', but a recording is already in progress. Ignoring.`);
+        return;
+    }
+
+    // Start a new recording session.
+    console.log(`[State ${cameraId}] Starting new recording session for event: ${label}`);
+    session.isRecording = true;
+    session.label = label;
+    
+    // Immediately capture the current pre-roll buffer.
+    session.segmentsToRecord = state.hlsSegmentBuffer.map(s => s.filename);
+    console.log(`[State ${cameraId}] Captured ${session.segmentsToRecord.length} pre-roll segments.`);
+
+    // Set a non-extendable timer to finalize the recording after a fixed duration.
+    session.finalizeTimeoutId = setTimeout(() => {
+        console.log(`[State ${cameraId}] Finalizing recording for event: ${session.label}`);
+        finalizeCallback();
+        
+        // Reset the session state after triggering the finalization.
+        session.isRecording = false;
+        session.segmentsToRecord = [];
+        session.finalizeTimeoutId = null;
+        session.label = 'default';
+    }, RECORDING_DURATION_MS);
+
+    console.log(`[State ${cameraId}] Recording will be finalized in ${RECORDING_DURATION_MS / 1000} seconds.`);
 }
 
 /**
@@ -107,4 +143,4 @@ export function cleanupAllProcesses() {
       state.hlsStreamerProcess = null;
     }
   });
-} 
+}

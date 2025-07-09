@@ -38,29 +38,31 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
-    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // We explicitly ignore stdout and only listen to stderr to prevent the process from hanging.
+    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
 
     // Store the process in the global state.
     setHlsStreamerProcess(cameraId, ffmpegProcess);
 
-    // Monitor ffmpeg's output to track segment creation.
+    // Monitor ffmpeg's output to track segment creation and log errors.
     ffmpegProcess.stderr.on('data', (data: Buffer) => {
         const output = data.toString();
-        // ffmpeg logs segment creation to stderr. Example: "[hls @ 0x14f504ea0] Writing '.../segment000001.ts'"
-        if (output.includes("Writing '") && output.includes(".ts'")) {
-            const match = output.match(/'([^']+)\.ts'/);
+
+        // Always log the raw stderr output from ffmpeg for debugging purposes.
+        // This is crucial for understanding why a stream might be failing.
+        console.error(`[FFMPEG_STDERR ${cameraId}]: ${output.trim()}`);
+
+        // Check for the "Opening... for writing" message which indicates a new segment file.
+        if (output.includes("Opening '") && output.includes(".ts' for writing")) {
+            const match = output.match(/Opening '([^']+)' for writing/);
             if (match && match[1]) {
-                const segmentFilename = `${match[1]}.ts`;
+                const segmentPath = match[1];
                 const segment = {
-                    filename: path.basename(segmentFilename),
+                    filename: path.basename(segmentPath),
                     startTime: Date.now(),
                 };
                 addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
-                // console.log(`[HLS ${cameraId}] New segment created: ${segment.filename}`);
             }
-        } else if (process.env.NODE_ENV === 'development') {
-            // Log other stderr output only in development to avoid spamming logs.
-            console.log(`[FFMPEG_STDERR ${cameraId}]: ${output.trim()}`);
         }
     });
 
@@ -69,7 +71,7 @@ async function startHlsStreamForCamera(camera: Camera) {
     });
 
     ffmpegProcess.on('close', (code, signal) => {
-        console.warn(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
+        console.error(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
         // Don't restart if the process was intentionally killed.
         const state = getCameraState(cameraId);
         if (state.hlsStreamerProcess) { // Check if it was killed by our cleanup logic

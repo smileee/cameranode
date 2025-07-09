@@ -124,4 +124,51 @@ export async function concatenateSegments(segmentFiles: string[], segmentsDir: s
             }
         });
     });
+}
+
+/**
+ * A fire-and-forget function that orchestrates the finalization of a recording.
+ * It concatenates segments and generates a thumbnail in the background.
+ * @param cameraId The ID of the camera.
+ * @param segmentsToRecord The list of segment filenames to include.
+ * @param label The event label for naming the final file.
+ */
+export function finalizeAndSaveRecording(
+    cameraId: string,
+    segmentsToRecord: string[],
+    label: string
+) {
+    console.log(`[Finalize] Starting background finalization for camera ${cameraId}, event: ${label}`);
+
+    // This is a fire-and-forget process. We run it in the background
+    // and don't await its completion to avoid blocking the main thread.
+    (async () => {
+        const uniqueSegments = [...new Set(segmentsToRecord)];
+        if (uniqueSegments.length === 0) {
+            console.warn(`[Finalize] No segments to record for camera ${cameraId}. Aborting.`);
+            return;
+        }
+
+        const liveDir = path.join(process.cwd(), 'recordings', cameraId, 'live');
+        const outputDir = path.join(process.cwd(), 'recordings', cameraId);
+        await fs.mkdir(outputDir, { recursive: true });
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const outputFileName = `rec-${label}-${timestamp}.mp4`;
+        const outputPath = path.join(outputDir, outputFileName);
+
+        try {
+            const success = await concatenateSegments(uniqueSegments, liveDir, outputPath);
+
+            if (success) {
+                console.log(`[Finalize] Successfully created video: ${outputPath}`);
+                // Now, generate a thumbnail for the new video.
+                await generateThumbnail(outputPath);
+            } else {
+                console.error(`[Finalize] Failed to create video for camera ${cameraId}.`);
+            }
+        } catch (error) {
+            console.error(`[Finalize] An unexpected error occurred during finalization for camera ${cameraId}:`, error);
+        }
+    })();
 } 
