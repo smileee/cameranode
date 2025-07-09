@@ -54,7 +54,8 @@ async function startHlsStreamForCamera(camera: Camera) {
         console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
 
         // The regex check is now applied to a clean, complete line.
-        const match = line.match(/Opening '([^']+\.ts)'/);
+        // This looks for the exact phrase "Opening '...ts' for writing" to avoid ambiguity.
+        const match = line.match(/Opening '([^']+\.ts)' for writing/);
         if (match && match[1]) {
             const segmentPath = match[1];
             const segment = {

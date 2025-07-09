@@ -14,75 +14,102 @@ type Data = {
   events: Event[];
 };
 
-class LowDBAdapter {
-  private db!: Low<Data>;
-  private defaultData: Data = {
+// Use a singleton pattern to ensure we only have one instance of the database
+// and that it's only initialized when first needed (lazy initialization).
+let dbInstance: Low<Data> | null = null;
+let initializationPromise: Promise<void> | null = null;
+
+const defaultData: Data = {
     favorites: {},
     events: [],
-  };
-  private initializationPromise: Promise<void>;
+};
 
-  constructor() {
-    this.initializationPromise = this.initialize();
-  }
-  
-  private async initialize(): Promise<void> {
-    const dbPath = path.join(process.cwd(), 'db.json');
-    const adapter = new JSONFile<Data>(dbPath);
-    this.db = new Low<Data>(adapter, this.defaultData);
+async function getDB(): Promise<Low<Data>> {
+    // If the instance already exists, return it.
+    if (dbInstance) {
+        return dbInstance;
+    }
+
+    // If initialization is in progress, wait for it to complete.
+    if (initializationPromise) {
+        await initializationPromise;
+        return dbInstance!;
+    }
     
-    await this.db.read();
-    
-    this.db.data ||= this.defaultData;
-    this.db.data.favorites ||= {};
-    this.db.data.events ||= [];
-    
-    await this.db.write();
-  }
+    // Start the initialization process.
+    initializationPromise = (async () => {
+        const dbPath = path.join(process.cwd(), 'db.json');
+        const adapter = new JSONFile<Data>(dbPath);
+        const db = new Low<Data>(adapter, defaultData);
+        
+        await db.read().catch(err => {
+            // This can happen if the file is empty or corrupted.
+            // We'll proceed with default data.
+            console.warn(`Could not read db.json, starting fresh. Error: ${err.message}`);
+            db.data = defaultData;
+        });
 
-  async getMediaMetadata(filePath: string): Promise<{ isFavorite: boolean }> {
-    await this.initializationPromise;
-    return this.db.data.favorites[filePath] || { isFavorite: false };
-  }
+        // Ensure data structure is sound
+        db.data ||= defaultData;
+        db.data.favorites ||= {};
+        db.data.events ||= [];
+        
+        await db.write();
 
-  async setFavorite(filePath: string, isFavorite: boolean): Promise<void> {
-    await this.initializationPromise;
-    this.db.data.favorites[filePath] = { isFavorite };
-    await this.db.write();
-  }
+        dbInstance = db;
+    })();
 
-  async addEvent(event: { cameraId: string, type: string, label?: string }): Promise<void> {
-    await this.initializationPromise;
-    this.db.data.events.push({
+    await initializationPromise;
+    initializationPromise = null; // Reset for any subsequent re-initialization needs
+    return dbInstance!;
+}
+
+export async function getMediaMetadata(filePath: string): Promise<{ isFavorite: boolean }> {
+    const db = await getDB();
+    return db.data?.favorites[filePath] || { isFavorite: false };
+}
+
+export async function setFavorite(filePath: string, isFavorite: boolean): Promise<void> {
+    const db = await getDB();
+    if (!db.data) return;
+    db.data.favorites[filePath] = { isFavorite };
+    await db.write();
+}
+
+export async function addEvent(event: { cameraId: string, type: string, label?: string }): Promise<void> {
+    const db = await getDB();
+    if (!db.data) return;
+    db.data.events.push({
         ...event,
         timestamp: new Date().toISOString(),
     });
-    await this.db.write();
-  }
+    await db.write();
+}
 
-  async getEventsForVideo(videoPath: string, windowSeconds: number = 70): Promise<Event[]> {
-      await this.initializationPromise;
+export async function getEventsForVideo(videoPath: string, windowSeconds: number = 70): Promise<Event[]> {
+    const db = await getDB();
+    if (!db.data) return [];
       
-      const videoStartDate = parseDateFromFilename(videoPath);
+    const videoStartDate = parseDateFromFilename(videoPath);
       
-      if (!videoStartDate || isNaN(videoStartDate.getTime())) {
-          return [];
-      }
+    if (!videoStartDate || isNaN(videoStartDate.getTime())) {
+        return [];
+    }
 
-      const videoEndDate = new Date(videoStartDate.getTime() + windowSeconds * 1000);
+    const videoEndDate = new Date(videoStartDate.getTime() + windowSeconds * 1000);
 
-      return this.db.data.events.filter(event => {
-          const eventDate = new Date(event.timestamp);
-          return eventDate >= videoStartDate && eventDate <= videoEndDate;
-      });
-  }
+    return db.data.events.filter(event => {
+        const eventDate = new Date(event.timestamp);
+        return eventDate >= videoStartDate && eventDate <= videoEndDate;
+    });
+}
 
-  async getEventsForCamera(cameraId: string): Promise<Event[]> {
-    await this.initializationPromise;
-    return this.db.data.events
+export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
+    const db = await getDB();
+    if (!db.data) return [];
+    return db.data.events
         .filter(event => event.cameraId === cameraId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }
 }
 
 function parseDateFromFilename(filename: string): Date | null {
@@ -95,12 +122,4 @@ function parseDateFromFilename(filename: string): Date | null {
         }
     }
     return null;
-}
-
-const dbInstance = new LowDBAdapter();
-
-export const getMediaMetadata = dbInstance.getMediaMetadata.bind(dbInstance);
-export const setFavorite = dbInstance.setFavorite.bind(dbInstance);
-export const addEvent = dbInstance.addEvent.bind(dbInstance);
-export const getEventsForVideo = dbInstance.getEventsForVideo.bind(dbInstance);
-export const getEventsForCamera = dbInstance.getEventsForCamera.bind(dbInstance); 
+} 
