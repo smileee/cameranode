@@ -7,11 +7,14 @@ import { addEvent } from '@/server/db';
  * This endpoint is designed to be called by an external service (e.g., Frigate)
  */
 export async function POST(req: NextRequest) {
+    console.log('[Webhook] Received a request.');
+    
     // The camera ID should be part of the URL, e.g., /api/webhook/1?label=person
     const cameraId = req.nextUrl.searchParams.get('camera');
     const label = req.nextUrl.searchParams.get('label') || 'motion';
 
     if (!cameraId) {
+        console.error('[Webhook] Request rejected: Camera ID is missing in the URL.');
         return NextResponse.json({ error: 'Camera ID is required' }, { status: 400 });
     }
 
@@ -22,6 +25,8 @@ export async function POST(req: NextRequest) {
         type: 'detection',
         label,
     });
+
+    console.log(`[Webhook] Event '${label}' successfully logged for camera ${cameraId}.`);
 
     // We no longer trigger recordings from the webhook.
     // The old logic has been removed.

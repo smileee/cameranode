@@ -57,13 +57,23 @@ async function startHlsStreamForCamera(camera: Camera) {
     await fs.mkdir(liveDir, { recursive: true });
 
     const ffmpegArgs = [
+        // Input
         '-rtsp_transport', 'tcp',
-        // Give FFmpeg more time and data to analyze the stream to avoid codec errors.
-        '-analyzeduration', '3000000', // 3 seconds
-        '-probesize', '3000000',       // 3MB
+        '-analyzeduration', '3000000', // 3s
+        '-probesize', '3000000', // 3MB
         '-i', camera.rtspUrl,
-        '-c:v', 'copy',           // No re-encoding, direct copy of the video stream.
-        '-an',                    // No audio.
+
+        // Output
+        // Re-encode the video to H.264 for broader compatibility and to fix stream errors.
+        // -preset ultrafast is light on the CPU.
+        // -tune zerolatency is crucial for live streaming.
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-tune', 'zerolatency',
+        '-b:v', '2000k', // Bitrate of 2Mbps, adjust as needed.
+        '-an', // No audio
+
+        // HLS options
         '-f', 'hls',
         '-hls_time', HLS_SEGMENT_DURATION_SECONDS.toString(),
         '-hls_list_size', HLS_LIST_SIZE.toString(),
