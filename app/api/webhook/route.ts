@@ -1,37 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCameraState } from '@/server/state';
-import { addEvent } from '@/server/db';
 
 /**
- * Handles incoming webhook requests to trigger camera recordings.
- * This endpoint is designed to be called by an external service (e.g., Frigate)
+ * A simplified webhook handler for debugging purposes.
+ * It logs a message and returns a success response immediately.
  */
 export async function POST(req: NextRequest) {
-    console.log('[Webhook] Received a request.');
+    console.log('--- [DEBUG] WEBHOOK RECEIVED ---');
+    console.log(`Request URL: ${req.url}`);
+    console.log(`Request Method: ${req.method}`);
     
-    // The camera ID should be part of the URL, e.g., /api/webhook/1?label=person
-    const cameraId = req.nextUrl.searchParams.get('camera');
-    const label = req.nextUrl.searchParams.get('label') || 'motion';
+    // Log all headers
+    const headers = Object.fromEntries(req.headers);
+    console.log('Request Headers:', JSON.stringify(headers, null, 2));
 
-    if (!cameraId) {
-        console.error('[Webhook] Request rejected: Camera ID is missing in the URL.');
-        return NextResponse.json({ error: 'Camera ID is required' }, { status: 400 });
+    try {
+        const rawBody = await req.text();
+        console.log(`Received Body: ${rawBody || '[EMPTY]'}`);
+    } catch (e) {
+        console.log('Error reading body:', e);
     }
-
-    // Instead of triggering a recording, we just log the event.
-    // The frontend will be responsible for initiating the video generation.
-    await addEvent({
-        cameraId,
-        type: 'detection',
-        label,
-    });
-
-    console.log(`[Webhook] Event '${label}' successfully logged for camera ${cameraId}.`);
-
-    // We no longer trigger recordings from the webhook.
-    // The old logic has been removed.
     
-    return NextResponse.json({
-        message: `Event '${label}' logged for camera ${cameraId}.`,
-    });
+    return NextResponse.json({ status: 'received' }, { status: 200 });
 }

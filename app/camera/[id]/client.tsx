@@ -1,90 +1,94 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Camera } from '@/cameras.config';
 import LiveStream from '@/components/LiveStream';
+import { useEffect, useState } from 'react';
 
-// Define the type for a processed recording
-interface Recording {
-    id: string;
-    timestamp: string;
-    label: string;
-    url: string;
+interface DetectionEvent {
+  id: string;
+  timestamp: string;
+  label: string;
+  payload?: any;
 }
 
-const MediaLibrary = ({ camera }: { camera: Camera }) => {
-    const [recordings, setRecordings] = useState<Recording[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+interface ClientPageProps {
+  camera: Camera;
+  events: DetectionEvent[];
+}
 
-    useEffect(() => {
-        const fetchRecordings = async () => {
-            setIsLoading(true);
-            try {
-                const response = await fetch(`/api/media/${camera.id}`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch recordings');
-                }
-                const data: Recording[] = await response.json();
-                setRecordings(data);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+export default function ClientPage({ camera, events: initialEvents }: ClientPageProps) {
+  const [events, setEvents] = useState<DetectionEvent[]>(initialEvents);
+  const liveStreamUrl = `/api/media/live/${camera.id}/live.m3u8`;
+  const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
 
-        fetchRecordings();
-        // Set up a poller to refresh the recordings every 30 seconds
-        const intervalId = setInterval(fetchRecordings, 30000);
+  useEffect(() => {
+    const sortedInitial = [...initialEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    setEvents(sortedInitial);
 
-        // Cleanup interval on component unmount
-        return () => clearInterval(intervalId);
-    }, [camera.id]);
+    const fetchEvents = async () => {
+      try {
+        const response = await fetch(`/api/events?cameraId=${camera.id}`);
+        if (response.ok) {
+          const newEvents: DetectionEvent[] = await response.json();
+          newEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setEvents(newEvents);
+        }
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      }
+    };
 
-    return (
-        <div className="p-4 bg-gray-900 text-white rounded-lg shadow-lg">
-            <h2 className="text-xl font-bold mb-4">Media Library</h2>
-            {isLoading && <p>Loading media...</p>}
-            {error && <p className="text-red-500">Error: {error}</p>}
-            {!isLoading && recordings.length === 0 && (
-                <p>No recordings available for this camera yet.</p>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {recordings.map(rec => (
-                    <div key={rec.id} className="bg-gray-800 rounded-lg overflow-hidden shadow-md">
-                        <video controls preload="metadata" className="w-full">
-                            <source src={rec.url} type="video/mp4" />
-                            Your browser does not support the video tag.
-                        </video>
-                        <div className="p-4">
-                            <p className="text-sm text-gray-400">
-                                {new Date(rec.timestamp).toLocaleString()}
-                            </p>
-                            <p className="font-semibold">{rec.label}</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
+    const intervalId = setInterval(fetchEvents, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [camera.id, initialEvents]);
+
+  const handleGoLive = () => {
+    setCurrentStreamUrl(liveStreamUrl);
+  };
+  
+  const handleEventClick = (event: DetectionEvent) => {
+    // When an event is clicked, we can switch the stream to the recorded media file.
+    // For now, let's just log it and prepare for future implementation.
+    console.log(`Switching to event: ${event.id}`);
+    // Example of what it could be:
+    // setCurrentStreamUrl(`/api/media/${event.id}`);
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-black text-white p-4">
+      <header className="flex justify-between items-center mb-4">
+        <div>
+          <a href="/" className="text-blue-400 hover:underline">&larr; Back to Cameras</a>
+          <h1 className="text-2xl font-bold mt-2">{camera.name}</h1>
         </div>
-    );
-};
+        <button onClick={handleGoLive} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+          Go Live
+        </button>
+      </header>
 
-
-const CameraClient = ({ camera }: { camera: Camera }) => {
-    const liveStreamUrl = `/api/media/${camera.id}/live/live.m3u8`;
-
-    return (
-        <div className="space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold mb-4">{camera.name}</h1>
-                <div className="aspect-video bg-black rounded-lg shadow-lg">
-                    <LiveStream src={liveStreamUrl} />
-                </div>
-            </div>
-            <MediaLibrary camera={camera} />
+      <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
+        <div className="md:col-span-2 h-full">
+          <LiveStream src={currentStreamUrl} />
         </div>
-    );
-};
-
-export default CameraClient; 
+        <aside className="bg-gray-900 p-4 rounded-lg h-full overflow-y-auto">
+          <h2 className="text-lg font-bold mb-4">Detection Events</h2>
+          {events.length > 0 ? (
+            <ul>
+              {events.map((event) => (
+                <li key={event.id} className="mb-4 p-2 bg-gray-800 rounded cursor-pointer hover:bg-gray-700" onClick={() => handleEventClick(event)}>
+                  <p className="font-bold text-blue-400">{event.label}</p>
+                  <p className="text-sm text-gray-400">
+                    {new Date(event.timestamp).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500">No detection events yet.</p>
+          )}
+        </aside>
+      </main>
+    </div>
+  );
+} 

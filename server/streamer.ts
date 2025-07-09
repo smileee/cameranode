@@ -57,20 +57,25 @@ async function startHlsStreamForCamera(camera: Camera) {
     await fs.mkdir(liveDir, { recursive: true });
 
     const ffmpegArgs = [
+        // Error Handling & Analysis
+        '-err_detect', 'ignore_err', // Ignore all errors
+        '-probesize', '5M',
+        '-analyzeduration', '5M',
+        '-fflags', '+genpts+discardcorrupt+nobuffer', // Generate timestamps, discard corrupted packets, and disable buffering
+
         // Input
+        '-hide_banner',
+        '-loglevel', 'error', // More verbose logs for debugging connection issues
         '-rtsp_transport', 'tcp',
-        '-analyzeduration', '3000000', // 3s
-        '-probesize', '3000000', // 3MB
+        '-timeout', '10000000', // 10-second connection timeout
         '-i', camera.rtspUrl,
 
         // Output
-        // Re-encode the video to H.264 for broader compatibility and to fix stream errors.
-        // -preset ultrafast is light on the CPU.
-        // -tune zerolatency is crucial for live streaming.
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-tune', 'zerolatency',
-        '-b:v', '2000k', // Bitrate of 2Mbps, adjust as needed.
+        '-pix_fmt', 'yuv420p', // Standard pixel format for H.264
+        '-bsf:v', 'h264_mp4toannexb', // Bitstream filter for HLS
         '-an', // No audio
 
         // HLS options
@@ -97,6 +102,7 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     rl.on('line', (line) => {
         // Log the ffmpeg output here to ensure it's not consumed by a separate listener.
+        // With loglevel at 'error', we should only see critical failure messages.
         console.log(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
 
         // Use a simpler regex to be less strict about the line format.
@@ -126,12 +132,15 @@ async function startHlsStreamForCamera(camera: Camera) {
     });
 
     ffmpegProcess.on('close', (code, signal) => {
-        if (code !== 0 && !signal) {
-            console.log(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
-        }
+        console.log(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code} and signal ${signal}.`);
+        
         const state = getCameraState(cameraId);
+        // Only restart if the process was not intentionally killed.
         if (state.hlsStreamerProcess) { 
+            console.log(`[FFMPEG_RESTART ${cameraId}] Restarting in 10s.`);
             setTimeout(() => startHlsStreamForCamera(camera), 10000);
+        } else {
+            console.log(`[FFMPEG_CLOSE ${cameraId}] Process was intentionally stopped. Will not restart.`);
         }
     });
 }

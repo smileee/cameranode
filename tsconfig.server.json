@@ -4,7 +4,11 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist",
-    "noEmit": false
+    "noEmit": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
-  "include": ["server/**/*.ts", "server.ts"]
+  "include": ["server/**/*.ts", "server.ts", "types/**/*.ts"]
 } 

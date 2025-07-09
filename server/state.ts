@@ -103,14 +103,34 @@ export function addHlsSegment(cameraId: string, segment: HlsSegment, bufferSize:
 // The frontend will be responsible for initiating the creation of a video file from the segments.
 
 /**
- * Kills all running ffmpeg processes for all cameras. Used for graceful shutdown.
+ * Kills all running ffmpeg processes for all cameras, attempting a graceful shutdown first.
  */
 export function cleanupAllProcesses() {
   console.log('[State] Cleaning up all camera processes...');
   cameraStates.forEach((state, cameraId) => {
-    if (state.hlsStreamerProcess) {
-      console.log(`[State] Killing HLS streamer for camera ${cameraId}`);
-      state.hlsStreamerProcess.kill('SIGINT');
+    const process = state.hlsStreamerProcess;
+    if (process && !process.killed) {
+      console.log(`[State] Initiating graceful shutdown for camera ${cameraId} (PID: ${process.pid})...`);
+      
+      // Remove all listeners to prevent automatic restart or other side effects during shutdown.
+      process.removeAllListeners();
+
+      // Attempt a graceful shutdown first.
+      process.kill('SIGTERM');
+
+      // Set a timeout to forcefully kill the process if it doesn't exit gracefully.
+      const killTimeout = setTimeout(() => {
+        if (!process.killed) {
+          console.warn(`[State] FFMPEG process for camera ${cameraId} did not exit gracefully. Forcing shutdown with SIGKILL.`);
+          process.kill('SIGKILL');
+        }
+      }, 2000); // 2-second grace period.
+
+      process.on('exit', () => {
+        console.log(`[State] FFMPEG process for camera ${cameraId} exited gracefully.`);
+        clearTimeout(killTimeout); // The process exited, so we don't need the forceful kill.
+      });
+
       state.hlsStreamerProcess = null;
     }
   });

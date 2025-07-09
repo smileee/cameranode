@@ -1,0 +1,17 @@
+{
+  "events": [
+    {
+      "id": "n-Asa5YpHoloaaphNGPa5",
+      "timestamp": "2025-07-09T20:34:19.490Z",
+      "cameraId": "1",
+      "type": "detection",
+      "label": "manual_test_2",
+      "payload": {
+        "type": "object_detected",
+        "label": "manual_test_2",
+        "score": 99
+      },
+      "status": "pending"
+    }
+  ]
+}

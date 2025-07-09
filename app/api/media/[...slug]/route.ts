@@ -3,41 +3,65 @@ import path from 'path';
 import fs from 'fs';
 import { stat } from 'fs/promises';
 
+const HLS_OUTPUT_DIR = 'recordings';
+
 /**
- * API route to serve static media files (recordings).
- * The path is captured in the 'slug' parameter.
+ * Serves HLS media files (playlists and segments) for both live and DVR streaming.
+ * URL structure:
+ * - Live playlist: /api/media/[cameraId]/live/live.m3u8
+ * - Live segment:  /api/media/[cameraId]/live/[segment].ts
+ * - DVR segment:   /api/media/dvr/[cameraId]/[segment].ts
  */
 export async function GET(request: Request, { params }: { params: { slug: string[] } }) {
-    // The slug is an array of path segments. e.g., ['file', 'recordings', '1', 'rec-....mp4']
     const slug = params.slug;
 
-    if (!slug || slug.length < 2 || slug[0] !== 'file') {
-        return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+    if (!slug || slug.length < 2) {
+        return new Response('Invalid media path', { status: 400 });
     }
 
-    // Reconstruct the file path relative to the project root.
-    // We skip the first 'file' segment.
-    const relativePath = path.join(...slug.slice(1));
-    const filePath = path.join(process.cwd(), relativePath);
+    let filePath: string;
+    const streamType = slug[0]; // 'live' or 'dvr'
 
+    if (streamType === 'live') {
+        // Path for live files: [cameraId, 'live', 'live.m3u8' or 'segment.ts']
+        const [_, cameraId, ...rest] = slug;
+        const fileName = rest.join('/');
+        filePath = path.join(process.cwd(), HLS_OUTPUT_DIR, cameraId, 'live', fileName);
+    } else if (streamType === 'dvr') {
+        // Path for DVR files: ['dvr', cameraId, 'segment.ts']
+        const [_, cameraId, fileName] = slug;
+        filePath = path.join(process.cwd(), HLS_OUTPUT_DIR, cameraId, 'live', fileName);
+    } else {
+        return new Response('Invalid stream type in path', { status: 400 });
+    }
+    
+    // Sanitize path to prevent directory traversal
+    const safeBasePath = path.join(process.cwd(), HLS_OUTPUT_DIR);
+    if (!path.resolve(filePath).startsWith(safeBasePath)) {
+        return new Response('Forbidden', { status: 403 });
+    }
+    
     try {
-        // Check if the file exists and get its stats.
         const stats = await stat(filePath);
         const stream = fs.createReadStream(filePath);
         
-        // Return the video file as a stream.
+        const contentType = filePath.endsWith('.m3u8') 
+            ? 'application/vnd.apple.mpegurl' 
+            : 'video/mp2t';
+
         return new NextResponse(stream as any, {
             status: 200,
             headers: {
-                'Content-Type': 'video/mp4',
+                'Content-Type': contentType,
                 'Content-Length': stats.size.toString(),
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
             },
         });
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            return new Response('File not found', { status: 404 });
         }
         console.error(`[API Media File] Error serving file ${filePath}:`, error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return new Response('Internal Server Error', { status: 500 });
     }
 } 

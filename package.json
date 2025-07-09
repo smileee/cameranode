@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json server.ts",
+    "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only --project tsconfig.server.json server.ts",
     "build:server": "tsc --project tsconfig.server.json",
     "build": "npm run build:server && next build",
-    "start": "NODE_ENV=production node dist/server.js",
+    "start": "NODE_ENV=production node -r tsconfig-paths/register dist/server.js",
     "lint": "next lint",
     "pm2:start": "pm2 start ecosystem.config.js --env production",
     "pm2:stop": "pm2 stop ecosystem.config.js",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@tabler/icons-react": "^3.34.0",
     "@types/mime-types": "^3.0.1",
+    "better-sqlite3": "^12.2.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "ffmpeg-static": "^5.2.0",
@@ -22,14 +23,17 @@
     "lowdb": "^7.0.1",
     "mime-types": "^3.0.1",
     "next": "^14.1.3",
+    "proper-lockfile": "^4.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsconfig-paths": "^4.2.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/hls.js": "^0.13.3",
     "@types/node": "^20.19.2",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.0",
     "@types/ws": "^8.18.1",

@@ -1,102 +1,130 @@
-import path from 'path';
+import { JSONFilePreset } from 'lowdb/node';
 import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
+import path from 'path';
+import { Event } from '@/types/event';
+import { lock, unlock } from 'proper-lockfile';
 import { nanoid } from 'nanoid';
 
-export interface Event {
-    id: string;
-    timestamp: string;
-    cameraId: string;
-    type: 'detection';
-    label: string;
-    status: 'pending' | 'processed';
-    videoPath?: string; // Path to the generated MP4 file
-}
+const dbPath = path.join(process.cwd(), 'db.json');
 
-export interface DbData {
+type DbData = {
     events: Event[];
-}
-
-// Use a singleton pattern to ensure we only have one instance of the database
-// and that it's only initialized when first needed (lazy initialization).
-let dbInstance: Low<DbData> | null = null;
-let initializationPromise: Promise<void> | null = null;
+};
 
 const defaultData: DbData = {
     events: [],
 };
 
-export async function getDB(): Promise<Low<DbData>> {
-    // If the instance already exists, return it.
-    if (dbInstance) {
-        return dbInstance;
-    }
+// --- Singleton DB Initializer (Race-condition and multi-process proof) ---
+let dbPromise: Promise<Low<DbData>> | null = null;
 
-    // If initialization is in progress, wait for it to complete.
-    if (initializationPromise) {
-        await initializationPromise;
-        return dbInstance!;
+const initializeDb = (): Promise<Low<DbData>> => {
+  if (dbPromise) {
+    return dbPromise;
+  }
+  
+  // Start the initialization process and store the promise
+  dbPromise = (async () => {
+    // We create the LowDB instance with default data.
+    const db = await JSONFilePreset<DbData>(dbPath, defaultData);
+    
+    // Acquire a lock before doing anything with the file system.
+    const release = await lock(dbPath, { 
+        retries: { retries: 5, factor: 1.2, minTimeout: 100 },
+        stale: 5000 
+    });
+
+    try {
+      await db.read();
+    } catch (e: any) {
+      console.error('[DB] Could not read db.json. This is expected if the file is new or was corrupted.', e.message);
+    } finally {
+      await release();
     }
     
-    // Start the initialization process.
-    initializationPromise = (async () => {
-        const dbPath = path.join(process.cwd(), 'db.json');
-        const adapter = new JSONFile<DbData>(dbPath);
-        const db = new Low<DbData>(adapter, defaultData);
-        
-        await db.read().catch(err => {
-            console.error("Error reading db.json, starting with default data.", err);
-        });
+    db.data ||= defaultData;
+    
+    await db.write();
 
-        // Ensure data structure is sound
-        db.data ||= defaultData;
-        db.data.events ||= [];
-        
-        dbInstance = db;
-    })();
+    return db;
+  })();
+  
+  return dbPromise;
+};
 
-    await initializationPromise;
-    initializationPromise = null; // Reset for any subsequent re-initialization needs
-    return dbInstance!;
+// All DB functions will now get the DB instance via this function.
+async function getDb(): Promise<Low<DbData>> {
+  return initializeDb();
 }
 
-export async function addEvent(eventData: { cameraId: string, type: 'detection', label: string }): Promise<Event> {
-    const db = await getDB();
-    await db.read();
+
+export async function getEvents(filters?: Partial<Event>): Promise<Event[]> {
+    const db = await getDb();
+    
+    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    try {
+        await db.read();
+        db.data ||= defaultData;
+    } finally {
+        await release();
+    }
+
+    if (!filters) {
+        return db.data.events;
+    }
+
+    return db.data.events.filter(event => {
+        return Object.entries(filters).every(([key, value]) => (event as any)[key] === value);
+    });
+}
+
+export async function addEvent(eventData: Omit<Event, 'id' | 'timestamp'>): Promise<Event> {
+    const db = await getDb();
     const newEvent: Event = {
         id: nanoid(),
         timestamp: new Date().toISOString(),
-        cameraId: eventData.cameraId,
-        type: eventData.type,
-        label: eventData.label,
-        status: 'pending', // Always start as pending
+        ...eventData,
     };
-    db.data.events.push(newEvent);
-    await db.write();
-    return newEvent;
+
+    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    try {
+        await db.read();
+        db.data ||= defaultData;
+        db.data.events.unshift(newEvent);
+        await db.write();
+        console.log(`[DB] Event added successfully: ${newEvent.id}`);
+        return newEvent;
+    } catch (error) {
+        console.error('[DB] Error adding event:', error);
+        throw error;
+    } finally {
+        await release();
+    }
 }
 
-/**
- * Updates an event in the database.
- * @param eventId The ID of the event to update.
- * @param updates The fields to update.
- * @returns The updated event or null if not found.
- */
-export async function updateEvent(eventId: string, updates: Partial<Pick<Event, 'status' | 'videoPath'>>): Promise<Event | null> {
-    const db = await getDB();
-    await db.read(); 
-    const event = db.data.events.find(e => e.id === eventId);
-    if (event) {
-        Object.assign(event, updates);
-        await db.write();
-        return event;
+export async function getEventById(id: string): Promise<Event | undefined> {
+    const db = await getDb();
+    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    try {
+        await db.read();
+        db.data ||= defaultData;
+    } finally {
+        await release();
     }
-    return null;
+    return db.data.events.find(event => event.id === id);
 }
 
 export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
-    const db = await getDB();
-    if (!db.data) return [];
+    const db = await getDb();
+    
+    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    try {
+        await db.read();
+        db.data ||= defaultData;
+    } finally {
+        await release();
+    }
+
     return db.data.events
         .filter(event => event.cameraId === cameraId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
