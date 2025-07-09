@@ -7,7 +7,9 @@ import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcess
 
 const HLS_OUTPUT_DIR = 'recordings';
 const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each video segment in seconds.
-const HLS_LIST_SIZE = 5; // Number of segments to keep in the live playlist.
+// Keep enough segments so that the oldest pre-roll plus the full recording duration (≈105 s) are still on disk
+// when finalization happens. With 2 s segments, 120 entries ≈4 minutes of footage.
+const HLS_LIST_SIZE = 120;
 const PRE_ROLL_BUFFER_SIZE = 30; // Number of segments to keep for pre-roll (e.g., 30 segments * 2s = 60s buffer).
 
 /**
@@ -35,7 +37,9 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-f', 'hls',
         '-hls_time', HLS_SEGMENT_DURATION_SECONDS.toString(),
         '-hls_list_size', HLS_LIST_SIZE.toString(),
-        '-hls_flags', 'delete_segments+program_date_time', // Auto-delete old segments and add timestamps.
+        // Keep all segments in the window; we don’t delete them automatically because they may be needed
+        // for a recording that is still being finalized. We still add program_date_time for accurate timelines.
+        '-hls_flags', 'program_date_time',
         '-hls_segment_filename', path.join(liveDir, 'segment%06d.ts'), // e.g., segment000001.ts
         path.join(liveDir, 'live.m3u8'),
     ];
