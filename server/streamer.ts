@@ -15,7 +15,7 @@ const PRE_ROLL_BUFFER_SIZE = 30; // Number of segments to keep for pre-roll (e.g
  * @param camera - The camera configuration object.
  */
 async function startHlsStreamForCamera(camera: Camera) {
-    const cameraId = camera.id;
+    const cameraId = String(camera.id);
     const liveDir = path.join(process.cwd(), HLS_OUTPUT_DIR, cameraId, 'live');
 
     console.log(`[HLS ${cameraId}] Initializing stream. Output directory: ${liveDir}`);

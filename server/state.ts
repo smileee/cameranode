@@ -38,8 +38,11 @@ const cameraStates = new Map<string, CameraState>();
  * @returns The state object for the camera.
  */
 export function getCameraState(cameraId: string): CameraState {
-  if (!cameraStates.has(cameraId)) {
-    cameraStates.set(cameraId, {
+  // Normalize the key to a string to avoid separate states for numeric vs string IDs.
+  const key = String(cameraId);
+
+  if (!cameraStates.has(key)) {
+    cameraStates.set(key, {
       hlsStreamerProcess: null,
       hlsSegmentBuffer: [],
       recordingSession: {
@@ -50,7 +53,7 @@ export function getCameraState(cameraId: string): CameraState {
       },
     });
   }
-  return cameraStates.get(cameraId)!;
+  return cameraStates.get(key)!;
 }
 
 /**
