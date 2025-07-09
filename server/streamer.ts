@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { createInterface } from 'readline';
 import { Camera, CAMERAS } from '../cameras.config';
 import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcesses } from './state';
 
@@ -38,36 +39,30 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
-    // We explicitly ignore stdout and only listen to stderr to prevent the process from hanging.
     const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
-
-    // Store the process in the global state.
     setHlsStreamerProcess(cameraId, ffmpegProcess);
     
-    let buffer = '';
-    ffmpegProcess.stderr.on('data', (data: Buffer) => {
-        buffer += data.toString();
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || ''; // Keep the last partial line in the buffer
+    // Use the readline interface for robust, line-by-line processing of the stream.
+    // This correctly handles all forms of line breaks (\n, \r, \r\n) and partial data chunks.
+    const rl = createInterface({
+        input: ffmpegProcess.stderr,
+        crlfDelay: Infinity
+    });
 
-        for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (line) {
-                console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
-            }
+    rl.on('line', (line) => {
+        // Always log the raw output for easier debugging in the future.
+        console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
 
-            // More robust check for the segment creation message.
-            // It looks for "Opening '...'.ts'" and extracts the path.
-            const match = line.match(/Opening '([^']+\.ts)'/);
-            if (match && match[1]) {
-                const segmentPath = match[1];
-                const segment = {
-                    filename: path.basename(segmentPath),
-                    path: segmentPath,
-                    startTime: Date.now(),
-                };
-                addHlsSegment(cameraId, segment);
-            }
+        // The regex check is now applied to a clean, complete line.
+        const match = line.match(/Opening '([^']+\.ts)'/);
+        if (match && match[1]) {
+            const segmentPath = match[1];
+            const segment = {
+                filename: path.basename(segmentPath),
+                path: segmentPath,
+                startTime: Date.now(),
+            };
+            addHlsSegment(cameraId, segment);
         }
     });
 
@@ -77,9 +72,8 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     ffmpegProcess.on('close', (code, signal) => {
         console.error(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
-        // Don't restart if the process was intentionally killed.
         const state = getCameraState(cameraId);
-        if (state.hlsStreamerProcess) { // Check if it was killed by our cleanup logic
+        if (state.hlsStreamerProcess) { 
             setTimeout(() => startHlsStreamForCamera(camera), 10000);
         }
     });
