@@ -3,56 +3,79 @@ import { CAMERAS } from '@/cameras.config';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
-import ffmpegPath from 'ffmpeg-static';
 
-const FFMPEG_PATH = ffmpegPath || 'ffmpeg';
+// Use a known path for ffmpeg, or fallback to the system path
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function getLatestSegment(liveDir: string): Promise<string | null> {
+    try {
+        const files = await fs.readdir(liveDir);
+        const tsFiles = files
+            .filter(file => file.endsWith('.ts'))
+            .sort((a, b) => b.localeCompare(a)); // Sort descending to get the latest
+
+        return tsFiles.length > 0 ? path.join(liveDir, tsFiles[0]) : null;
+    } catch (error) {
+        console.warn(`[Screenshot] Could not read HLS live directory: ${liveDir}`, error);
+        return null;
+    }
+}
+
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
     const cameraId = params.id;
     const camera = CAMERAS.find(c => c.id === cameraId);
 
     if (!camera) {
-        return NextResponse.json({ error: 'Camera not found' }, { status: 404 });
+        return new Response('Camera not found', { status: 404 });
     }
 
-    const { rtspUrl } = camera;
-    
-    const screenshotsDir = path.join(process.cwd(), 'screenshots', cameraId);
-    await fs.mkdir(screenshotsDir, { recursive: true });
+    const liveDir = path.join(process.cwd(), 'recordings', cameraId, 'live');
+    const latestSegment = await getLatestSegment(liveDir);
 
-    const timestamp = new Date().toISOString().replace(/:/g, '-');
-    const outputPath = path.join(screenshotsDir, `screenshot-${timestamp}.jpg`);
+    if (!latestSegment) {
+        console.warn(`[Screenshot] No HLS segments found for camera ${cameraId}. The stream might be down.`);
+        return new Response('Live stream segment not available', { status: 404 });
+    }
 
     const ffmpegArgs = [
-        '-y',
-        '-i', rtspUrl,
-        '-vframes', '1',
-        '-q:v', '2', // Best quality
-        outputPath
+        '-i', latestSegment, // Input from the latest segment
+        '-vframes', '1',      // Extract a single frame
+        '-q:v', '3',          // Good quality for JPEG
+        '-f', 'image2pipe',   // Output to a pipe
+        '-c:v', 'mjpeg',      // Codec for JPEG output
+        'pipe:1'              // Output to stdout
     ];
 
-    console.log('Running ffmpeg for screenshot:', FFMPEG_PATH, ffmpegArgs.join(' '));
+    const ffmpegProcess = spawn(FFMPEG_PATH, ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    const ffmpegProcess = spawn(FFMPEG_PATH, ffmpegArgs);
+    // Pipe ffmpeg's stderr to the console for debugging
+    ffmpegProcess.stderr.on('data', (data) => {
+        console.error(`[ffmpeg-screenshot] stderr: ${data}`);
+    });
 
-    return new Promise((resolve) => {
-        ffmpegProcess.on('close', (code) => {
-            if (code === 0) {
-                console.log('Screenshot saved to', outputPath);
-                resolve(NextResponse.json({ success: true, path: outputPath }));
-            } else {
-                console.error(`ffmpeg process exited with code ${code}`);
-                resolve(NextResponse.json({ error: 'Failed to take screenshot' }, { status: 500 }));
-            }
-        });
+    // Convert the Node.js Readable stream to a Web ReadableStream
+    const stream = new ReadableStream({
+        start(controller) {
+            ffmpegProcess.stdout.on('data', (chunk) => {
+                controller.enqueue(chunk);
+            });
+            ffmpegProcess.stdout.on('end', () => {
+                controller.close();
+            });
+            ffmpegProcess.stdout.on('error', (err) => {
+                controller.error(err);
+            });
+        },
+        cancel() {
+            ffmpegProcess.kill();
+        },
+    });
 
-        ffmpegProcess.stderr.on('data', (data) => {
-            console.error(`ffmpeg stderr: ${data}`);
-        });
-
-         ffmpegProcess.on('error', (err) => {
-            console.error('Failed to start ffmpeg process for screenshot:', err);
-            resolve(NextResponse.json({ error: 'Failed to start ffmpeg process' }, { status: 500 }));
-        });
+    return new Response(stream, {
+        status: 200,
+        headers: {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
     });
 } 
