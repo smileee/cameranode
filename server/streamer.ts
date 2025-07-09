@@ -42,7 +42,7 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
-    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
     setHlsStreamerProcess(cameraId, ffmpegProcess);
     
     // Use the readline interface for robust, line-by-line processing of the stream.
@@ -53,13 +53,14 @@ async function startHlsStreamForCamera(camera: Camera) {
     });
 
     rl.on('line', (line) => {
-        // Always log the raw output for easier debugging in the future.
-        console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
+        // Log the ffmpeg output here to ensure it's not consumed by a separate listener.
+        console.log(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
 
-        // This regex is now more specific, matching the exact format of FFmpeg's HLS output.
-        // It looks for "[hls @ ...]" followed by "Opening '...ts' for writing".
-        const match = line.match(/\[hls @ .*?\] Opening '([^']+\.ts)' for writing/);
+        // Use a simpler regex to be less strict about the line format.
+        const match = line.match(/Opening '([^']+\.ts)' for writing/);
+        
         if (match && match[1]) {
+            console.log(`[Streamer ${cameraId}] Matched segment file: ${match[1]}`);
             const segmentPath = match[1];
             const segment = {
                 filename: path.basename(segmentPath),
@@ -67,6 +68,9 @@ async function startHlsStreamForCamera(camera: Camera) {
                 startTime: Date.now(),
             };
             addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
+        } else {
+            // Log if a line doesn't match, to ensure we're not missing anything.
+            // console.log(`[Streamer ${cameraId}] No match: ${line}`);
         }
     });
 
@@ -75,7 +79,9 @@ async function startHlsStreamForCamera(camera: Camera) {
     });
 
     ffmpegProcess.on('close', (code, signal) => {
-        console.error(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
+        if (code !== 0 && !signal) {
+            console.log(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
+        }
         const state = getCameraState(cameraId);
         if (state.hlsStreamerProcess) { 
             setTimeout(() => startHlsStreamForCamera(camera), 10000);

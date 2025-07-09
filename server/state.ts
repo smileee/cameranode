@@ -82,6 +82,8 @@ export function addHlsSegment(cameraId: string, segment: HlsSegment, bufferSize:
     while (state.hlsSegmentBuffer.length > bufferSize) {
         state.hlsSegmentBuffer.shift();
     }
+
+    console.log(`[State ${cameraId}] Added segment ${segment.filename}. Pre-roll buffer size: ${state.hlsSegmentBuffer.length}. Recording segments: ${state.recordingSession.segmentsToRecord.length}.`);
 }
 
 const RECORDING_DURATION_MS = 75 * 1000; // 15s of pre-roll + 60s of recording.
