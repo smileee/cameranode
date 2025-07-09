@@ -8,7 +8,7 @@ import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcess
 const HLS_OUTPUT_DIR = 'recordings';
 const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each video segment in seconds.
 const HLS_LIST_SIZE = 5; // Number of segments to keep in the live playlist.
-const PRE_ROLL_BUFFER_SIZE = 15; // Number of segments to keep for pre-roll (e.g., 15 segments * 2s = 30s buffer).
+const PRE_ROLL_BUFFER_SIZE = 30; // Number of segments to keep for pre-roll (e.g., 30 segments * 2s = 60s buffer).
 
 /**
  * Starts a persistent ffmpeg process for a single camera to generate an HLS stream.
@@ -66,7 +66,7 @@ async function startHlsStreamForCamera(camera: Camera) {
                 path: segmentPath,
                 startTime: Date.now(),
             };
-            addHlsSegment(cameraId, segment);
+            addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
         }
     });
 
