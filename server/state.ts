@@ -96,7 +96,7 @@ const RECORDING_DURATION_MS = 75 * 1000; // 15s of pre-roll + 60s of recording.
 export function triggerRecording(
     cameraId: string, 
     label: string,
-    finalizeCallback: () => void,
+    finalizeCallback: (segments: string[], label: string) => void,
 ) {
     const state = getCameraState(cameraId);
     const session = state.recordingSession;
@@ -119,7 +119,10 @@ export function triggerRecording(
     // Set a non-extendable timer to finalize the recording after a fixed duration.
     session.finalizeTimeoutId = setTimeout(() => {
         console.log(`[State ${cameraId}] Finalizing recording for event: ${session.label}`);
-        finalizeCallback();
+        
+        // Pass the collected segments and the label directly to the callback.
+        // This avoids race conditions where the state might be cleared before processing.
+        finalizeCallback([...session.segmentsToRecord], session.label);
         
         // Reset the session state after triggering the finalization.
         session.isRecording = false;

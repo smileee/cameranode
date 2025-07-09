@@ -43,13 +43,8 @@ export async function POST(req: NextRequest) {
     const wasAlreadyRecording = session.isRecording;
 
     // Define the callback function that will be executed when the recording timer finishes.
-    const finalizeCallback = () => {
-        // Important: We get the state again inside the callback to ensure we have
-        // the most up-to-date list of segments at the moment of finalization.
-        const currentState = getCameraState(cameraId);
-        const segments = [...currentState.recordingSession.segmentsToRecord];
-        const label = currentState.recordingSession.label || 'recording';
-        
+    // This function now receives the segments and label directly to avoid race conditions.
+    const finalizeCallback = (segments: string[], label: string) => {
         // This function runs in the background (fire-and-forget)
         finalizeAndSaveRecording(cameraId, segments, label);
     };
