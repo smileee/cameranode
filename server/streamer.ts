@@ -56,18 +56,17 @@ async function startHlsStreamForCamera(camera: Camera) {
                 console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
             }
 
-            // Check for the "Opening... for writing" message which indicates a new segment file.
-            if (line.includes("Opening '") && line.includes(".ts' for writing")) {
-                const match = line.match(/Opening '([^']+)' for writing/);
-                if (match && match[1]) {
-                    const segmentPath = match[1];
-                    const segment = {
-                        filename: path.basename(segmentPath),
-                        path: segmentPath,
-                        startTime: Date.now(),
-                    };
-                    addHlsSegment(cameraId, segment);
-                }
+            // More robust check for the segment creation message.
+            // It looks for "Opening '...'.ts'" and extracts the path.
+            const match = line.match(/Opening '([^']+\.ts)'/);
+            if (match && match[1]) {
+                const segmentPath = match[1];
+                const segment = {
+                    filename: path.basename(segmentPath),
+                    path: segmentPath,
+                    startTime: Date.now(),
+                };
+                addHlsSegment(cameraId, segment);
             }
         }
     });
