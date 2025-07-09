@@ -26,6 +26,9 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     const ffmpegArgs = [
         '-rtsp_transport', 'tcp',
+        // Give FFmpeg more time and data to analyze the stream to avoid codec errors.
+        '-analyzeduration', '3000000', // 3 seconds
+        '-probesize', '3000000',       // 3MB
         '-i', camera.rtspUrl,
         '-c:v', 'copy',           // No re-encoding, direct copy of the video stream.
         '-an',                    // No audio.
@@ -53,9 +56,9 @@ async function startHlsStreamForCamera(camera: Camera) {
         // Always log the raw output for easier debugging in the future.
         console.error(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
 
-        // The regex check is now applied to a clean, complete line.
-        // This looks for the exact phrase "Opening '...ts' for writing" to avoid ambiguity.
-        const match = line.match(/Opening '([^']+\.ts)' for writing/);
+        // This regex is now more specific, matching the exact format of FFmpeg's HLS output.
+        // It looks for "[hls @ ...]" followed by "Opening '...ts' for writing".
+        const match = line.match(/\[hls @ .*?\] Opening '([^']+\.ts)' for writing/);
         if (match && match[1]) {
             const segmentPath = match[1];
             const segment = {
