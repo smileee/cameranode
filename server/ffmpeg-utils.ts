@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import path from 'path';
+import { promises as fs } from 'fs';
 
 const resolveFfmpegPath = () => {
     try {
@@ -58,6 +59,69 @@ export async function generateThumbnail(videoPath: string): Promise<string | nul
         ffmpegProcess.on('error', err => {
             console.error(`[Thumbnail] Failed to start ffmpeg process:`, err);
             resolve(null);
+        });
+    });
+}
+
+/**
+ * Concatenates HLS segment files (.ts) into a single MP4 file.
+ * @param segmentFiles - An array of the .ts filenames to concatenate, in order.
+ * @param segmentsDir - The directory where the segment files are located.
+ * @param outputPath - The full path for the output MP4 file.
+ * @returns A boolean indicating whether the concatenation was successful.
+ */
+export async function concatenateSegments(segmentFiles: string[], segmentsDir: string, outputPath: string): Promise<boolean> {
+    const manifestPath = path.join(segmentsDir, `manifest-${Date.now()}.txt`);
+    const manifestContent = segmentFiles.map(file => `file '${path.join(segmentsDir, file)}'`).join('\n');
+
+    try {
+        await fs.writeFile(manifestPath, manifestContent);
+    } catch (error) {
+        console.error('[Concat] Failed to write temporary manifest file:', error);
+        return false;
+    }
+
+    const ffmpegArgs = [
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', manifestPath,
+        '-c', 'copy', // Direct copy, no re-encoding
+        '-y',
+        outputPath,
+    ];
+
+    console.log(`[Concat] Starting concatenation for ${outputPath}...`);
+
+    return new Promise(async (resolve) => {
+        const ffmpegProcess = spawn(FFMPEG_PATH, ffmpegArgs);
+
+        ffmpegProcess.on('close', async (code) => {
+            if (code === 0) {
+                console.log(`[Concat] Concatenation successful: ${outputPath}`);
+                resolve(true);
+            } else {
+                console.error(`[Concat] Concatenation failed for ${outputPath} with exit code ${code}.`);
+                resolve(false);
+            }
+            // Cleanup the manifest file
+            try {
+                await fs.unlink(manifestPath);
+            } catch (err) {
+                console.warn(`[Concat] Failed to delete manifest file: ${manifestPath}`, err);
+            }
+        });
+
+        ffmpegProcess.stderr.on('data', data => console.error(`[Concat FFMPEG stderr]: ${data.toString()}`));
+
+        ffmpegProcess.on('error', async (err) => {
+            console.error(`[Concat] Failed to start ffmpeg process:`, err);
+            resolve(false);
+            // Cleanup the manifest file
+            try {
+                await fs.unlink(manifestPath);
+            } catch (unlinkErr) {
+                console.warn(`[Concat] Failed to delete manifest file on error: ${manifestPath}`, unlinkErr);
+            }
         });
     });
 } 

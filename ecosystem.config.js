@@ -1,21 +1,16 @@
 module.exports = {
   apps: [
     {
-      name: 'border-next',
-      script: 'node_modules/next/dist/bin/next',
-      args: 'start -H 0.0.0.0',
+      name: 'cameranode',
+      script: 'npm',
+      args: 'start',
       cwd: __dirname,
+      watch: false,
       env: {
-        NODE_ENV: 'production'
-      }
-    },
-    {
-      name: 'border-streamer',
-      script: 'node_modules/.bin/ts-node',
-      args: '--project tsconfig.server.json server/streamer.ts',
-      cwd: __dirname,
-      env: {
-        NODE_ENV: 'production'
+        NODE_ENV: 'development',
+      },
+      env_production: {
+        NODE_ENV: 'production',
       }
     }
   ]

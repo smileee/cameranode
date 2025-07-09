@@ -7,7 +7,7 @@ export interface Camera {
 export const CAMERAS: Camera[] = [
   {
     id: '1',
-    name: 'Cam',
+    name: 'Cam 1',
     rtspUrl: 'rtsp://192.168.9.232:554',
   },
   {

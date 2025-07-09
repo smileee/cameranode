@@ -1,65 +1,61 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import Script from 'next/script';
-import type { JSMpegPlayer } from '@/types/jsmpeg-player';
-
-const JSMPEG_SCRIPT_URL = "https://cdn.jsdelivr.net/gh/phoboslab/jsmpeg@b5799bf/jsmpeg.min.js";
+import { useEffect, useRef } from 'react';
+import Hls from 'hls.js';
 
 interface LiveStreamProps {
-  streamUrl: string;
+  /**
+   * The URL of the HLS playlist file (live.m3u8).
+   */
+  src: string;
 }
 
-export default function LiveStream({ streamUrl }: LiveStreamProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const playerRef = useRef<JSMpegPlayer | null>(null);
-  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
-  const [showButton, setShowButton] = useState(true);
+export default function LiveStream({ src }: LiveStreamProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (isScriptLoaded && !showButton) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        playerRef.current = new window.JSMpeg.Player(streamUrl, {
-          canvas: canvas,
-          autoplay: true,
+    const video = videoRef.current;
+    if (!video) return;
+
+    let hls: Hls | null = null;
+
+    if (Hls.isSupported()) {
+      hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(error => {
+          console.log('[HLS Player] Autoplay was prevented:', error);
+          // Browsers may prevent autoplay. We can show a play button here if needed.
         });
-      }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS support (e.g., Safari)
+      video.src = src;
+      video.addEventListener('loadedmetadata', () => {
+        video.play().catch(error => {
+          console.log('[HLS Player] Native autoplay was prevented:', error);
+        });
+      });
     }
 
     return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
+      if (hls) {
+        hls.destroy();
       }
     };
-  }, [isScriptLoaded, streamUrl, showButton]);
-
-  const handlePlayClick = () => {
-    setShowButton(false);
-  };
+  }, [src]);
 
   return (
-    <div className="w-full h-full relative">
-      <Script 
-        src={JSMPEG_SCRIPT_URL}
-        onLoad={() => {
-          console.log("JSMpeg script loaded.");
-          setIsScriptLoaded(true);
-        }}
+    <div className="w-full h-full bg-black">
+      <video
+        ref={videoRef}
+        controls
+        muted
+        autoPlay
+        playsInline
+        className="w-full h-full object-contain"
       />
-      <canvas ref={canvasRef} className="w-full h-full"></canvas>
-      {showButton && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <button
-            onClick={handlePlayClick}
-            disabled={!isScriptLoaded}
-            className="px-8 py-4 bg-gray-600 text-white font-bold rounded-lg shadow-lg hover:bg-gray-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            {isScriptLoaded ? 'Play Live Stream' : 'Loading Player...'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

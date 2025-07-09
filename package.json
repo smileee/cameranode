@@ -3,16 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names \"WEB,STREAM\" -c \"bgGreen.bold,bgBlue.bold\" \"npm:dev:next\" \"npm:dev:streamer\"",
-    "dev:next": "next dev -H 0.0.0.0",
-    "dev:streamer": "ts-node --project tsconfig.server.json server/streamer.ts",
-    "build": "next build",
-    "start": "next start",
+    "dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json server.ts",
+    "build:server": "tsc --project tsconfig.server.json",
+    "build": "npm run build:server && next build",
+    "start": "NODE_ENV=production node dist/server.js",
     "lint": "next lint",
-    "pm2:start": "pm2 start npm --name \"border-camera\" -- run dev",
-    "pm2:restart": "pm2 restart border-camera",
-    "pm2:start:prod": "pm2 start ecosystem.config.js",
-    "pm2:restart:prod": "pm2 restart ecosystem.config.js"
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.34.0",
@@ -20,23 +18,26 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "ffmpeg-static": "^5.2.0",
+    "hls.js": "^1.6.7",
     "lowdb": "^7.0.1",
     "mime-types": "^3.0.1",
     "next": "^14.1.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tsconfig-paths": "^4.2.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@types/hls.js": "^0.13.3",
     "@types/node": "^20.19.2",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.0",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.19",
-    "concurrently": "^8.2.2",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5"
   }
 }

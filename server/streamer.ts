@@ -1,147 +1,104 @@
-import { promises as fsp } from 'fs';
-import path from 'path';
-import { createServer } from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
 import { spawn, ChildProcess } from 'child_process';
-import { CAMERAS } from '../cameras.config';
-import ffmpegPath from 'ffmpeg-static';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { Camera, CAMERAS } from '../cameras.config';
+import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcesses } from './state';
 
-const STREAM_PORT = 8082;
-const FFMPEG_PATH = (ffmpegPath as string) || 'ffmpeg';
+const HLS_OUTPUT_DIR = 'recordings';
+const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each video segment in seconds.
+const HLS_LIST_SIZE = 5; // Number of segments to keep in the live playlist.
+const PRE_ROLL_BUFFER_SIZE = 15; // Number of segments to keep for pre-roll (e.g., 15 segments * 2s = 30s buffer).
 
-// Keep track of running ffmpeg processes, one per camera ID
-const runningStreams: Record<string, ChildProcess> = {};
+/**
+ * Starts a persistent ffmpeg process for a single camera to generate an HLS stream.
+ * @param camera - The camera configuration object.
+ */
+async function startHlsStreamForCamera(camera: Camera) {
+    const cameraId = camera.id;
+    const liveDir = path.join(process.cwd(), HLS_OUTPUT_DIR, cameraId, 'live');
 
-const server = createServer();
-const wss = new WebSocketServer({ server });
+    console.log(`[HLS ${cameraId}] Initializing stream. Output directory: ${liveDir}`);
 
-console.log(`[STREAMER] WebSocket streaming server starting on port ${STREAM_PORT}`);
+    // Clean up the live directory from previous runs.
+    await fs.rm(liveDir, { recursive: true, force: true });
+    await fs.mkdir(liveDir, { recursive: true });
 
-// Ensure a recordings directory exists for every camera at startup
-(async () => {
-  for (const cam of CAMERAS) {
-    const dir = path.join(process.cwd(), 'recordings', cam.id);
-    try {
-      await fsp.mkdir(dir, { recursive: true });
-    } catch (err) {
-      console.error(`[STREAMER] Failed to create recordings directory for camera ${cam.id}:`, err);
-    }
-  }
-})();
+    const ffmpegArgs = [
+        '-rtsp_transport', 'tcp',
+        '-i', camera.rtspUrl,
+        '-c:v', 'copy',           // No re-encoding, direct copy of the video stream.
+        '-an',                    // No audio.
+        '-f', 'hls',
+        '-hls_time', HLS_SEGMENT_DURATION_SECONDS.toString(),
+        '-hls_list_size', HLS_LIST_SIZE.toString(),
+        '-hls_flags', 'delete_segments+program_date_time', // Auto-delete old segments and add timestamps.
+        '-hls_segment_filename', path.join(liveDir, 'segment%06d.ts'), // e.g., segment000001.ts
+        path.join(liveDir, 'live.m3u8'),
+    ];
 
-wss.on('connection', (ws: WebSocket, req) => {
-  const url = req.url || '/';
-  const cameraId = url.substring(1); // Expecting URL format like "/<camera_id>"
-  const camera = CAMERAS.find(c => c.id === cameraId);
+    console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
-  if (!camera) {
-    console.log(`[STREAMER] Client connected for unknown camera ID: ${cameraId}. Closing connection.`);
-    ws.close(1011, `Camera with ID ${cameraId} not found.`);
-    return;
-  }
+    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  console.log(`[STREAMER] Client connected for camera: ${camera.name} (ID: ${cameraId})`);
+    // Store the process in the global state.
+    setHlsStreamerProcess(cameraId, ffmpegProcess);
 
-  // Tag this WebSocket with the camera ID so we can broadcast correctly
-  (ws as any).cameraId = cameraId;
-
-  // Send JSMpeg stream header so the client can decode dimensions
-  const width = 1280;
-  const height = 720;
-  const header = new Uint8Array(8);
-  header[0] = 0x4a; // J
-  header[1] = 0x53; // S
-  header[2] = 0x4d; // M
-  header[3] = 0x50; // P
-  header[4] = (width >> 8) & 0xff;
-  header[5] = width & 0xff;
-  header[6] = (height >> 8) & 0xff;
-  header[7] = height & 0xff;
-  ws.send(header);
-
-  // If a stream for this camera is already running, just add the new client
-  if (runningStreams[cameraId] && !runningStreams[cameraId].killed) {
-    console.log(`[STREAMER] FFMPEG for ${camera.name} is already running.`);
-    ws.on('close', () => handleClientDisconnect(cameraId));
-    return;
-  }
-  
-  // Start a new FFMPEG process for this camera
-  const ffmpegArgs = [
-    '-probesize', '5M', // Increase buffer to handle unstable streams
-    '-rtsp_transport', 'tcp',
-    '-i', camera.rtspUrl,
-    '-f', 'mpegts',
-    '-codec:v', 'mpeg1video',
-    '-s', '1280x720', // Stream resolution
-    '-b:v', '1000k',  // Bitrate
-    '-r', '30',       // Set output frame rate to 30 fps
-    '-bf', '0',       // No B-frames
-    '-an',            // No audio
-    'pipe:1',
-  ];
-  
-  console.log(`[FFMPEG] Spawning for ${camera.name}: ${FFMPEG_PATH} ${ffmpegArgs.join(' ')}`);
-  const ffmpegProcess = spawn(FFMPEG_PATH, ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-  runningStreams[cameraId] = ffmpegProcess;
-
-  ffmpegProcess.stdout.on('data', (data) => {
-    // Broadcast the video data to all clients watching this stream
-    wss.clients.forEach(client => {
-      if ((client as any).cameraId === cameraId && client.readyState === WebSocket.OPEN) {
-        client.send(data);
-      }
+    // Monitor ffmpeg's output to track segment creation.
+    ffmpegProcess.stderr.on('data', (data: Buffer) => {
+        const output = data.toString();
+        // ffmpeg logs segment creation to stderr. Example: "[hls @ 0x14f504ea0] Writing '.../segment000001.ts'"
+        if (output.includes("Writing '") && output.includes(".ts'")) {
+            const match = output.match(/'([^']+)\.ts'/);
+            if (match && match[1]) {
+                const segmentFilename = `${match[1]}.ts`;
+                const segment = {
+                    filename: path.basename(segmentFilename),
+                    startTime: Date.now(),
+                };
+                addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
+                // console.log(`[HLS ${cameraId}] New segment created: ${segment.filename}`);
+            }
+        } else if (process.env.NODE_ENV === 'development') {
+            // Log other stderr output only in development to avoid spamming logs.
+            console.log(`[FFMPEG_STDERR ${cameraId}]: ${output.trim()}`);
+        }
     });
-  });
 
-  ffmpegProcess.stderr.on('data', (data) => {
-    console.error(`[FFMPEG_STDERR][${camera.name}] ${data.toString()}`);
-  });
+    ffmpegProcess.on('error', (err) => {
+        console.error(`[FFMPEG_ERROR ${cameraId}] Process error:`, err);
+    });
 
-  ffmpegProcess.on('error', (err) => {
-    console.error(`[FFMPEG_ERROR][${camera.name}]`, err);
-    stopStream(cameraId);
-  });
+    ffmpegProcess.on('close', (code, signal) => {
+        console.warn(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code}, signal ${signal}. Restarting in 10s.`);
+        // Don't restart if the process was intentionally killed.
+        const state = getCameraState(cameraId);
+        if (state.hlsStreamerProcess) { // Check if it was killed by our cleanup logic
+            setTimeout(() => startHlsStreamForCamera(camera), 10000);
+        }
+    });
+}
 
-  ffmpegProcess.on('close', (code) => {
-    console.log(`[FFMPEG][${camera.name}] process exited with code ${code}`);
-    delete runningStreams[cameraId];
-  });
+/**
+ * Initializes the HLS streaming processes for all configured cameras.
+ */
+export function initializeCameraStreams() {
+    console.log('[Streamer] Initializing HLS streams for all cameras...');
+    for (const camera of CAMERAS) {
+        startHlsStreamForCamera(camera).catch(err => {
+            console.error(`[Streamer] Failed to initialize stream for camera ${camera.id}:`, err);
+        });
+    }
+}
 
-  ws.on('close', () => handleClientDisconnect(cameraId));
+// Graceful shutdown logic to clean up all ffmpeg processes.
+process.on('SIGINT', () => {
+    console.log('[Streamer] Received SIGINT. Shutting down gracefully.');
+    cleanupAllProcesses();
+    process.exit(0);
 });
 
-function handleClientDisconnect(cameraId: string) {
-  const camera = CAMERAS.find(c => c.id === cameraId);
-  const name = camera ? camera.name : `ID ${cameraId}`;
-  console.log(`[STREAMER] Client disconnected from ${name}.`);
-
-  // Check if any clients are still watching this stream
-  let clientsForThisStream = 0;
-  wss.clients.forEach(client => {
-    if (client.url === `/${cameraId}` && client.readyState === WebSocket.OPEN) {
-      clientsForThisStream++;
-    }
-  });
-
-  console.log(`[STREAMER] Remaining clients for ${name}: ${clientsForThisStream}`);
-  
-  if (clientsForThisStream === 0) {
-    stopStream(cameraId);
-  }
-}
-
-function stopStream(cameraId: string) {
-  const process = runningStreams[cameraId];
-  if (process && !process.killed) {
-    const camera = CAMERAS.find(c => c.id === cameraId);
-    const name = camera ? camera.name : `ID ${cameraId}`;
-    console.log(`[FFMPEG] No clients left for ${name}. Stopping stream.`);
-    process.kill('SIGTERM');
-    delete runningStreams[cameraId];
-  }
-}
-
-server.listen(STREAM_PORT, () => {
-  console.log(`[STREAMER] Server is listening on http://localhost:${STREAM_PORT}`);
+process.on('SIGTERM', () => {
+    console.log('[Streamer] Received SIGTERM. Shutting down gracefully.');
+    cleanupAllProcesses();
+    process.exit(0);
 });
