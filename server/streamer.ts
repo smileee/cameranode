@@ -44,24 +44,30 @@ async function startHlsStreamForCamera(camera: Camera) {
     // Store the process in the global state.
     setHlsStreamerProcess(cameraId, ffmpegProcess);
 
-    // Monitor ffmpeg's output to track segment creation and log errors.
+    let buffer = '';
     ffmpegProcess.stderr.on('data', (data: Buffer) => {
-        const output = data.toString();
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last partial line in the buffer
 
-        // Always log the raw stderr output from ffmpeg for debugging purposes.
-        // This is crucial for understanding why a stream might be failing.
-        console.error(`[FFMPEG_STDERR ${cameraId}]: ${output.trim()}`);
+        for (const line of lines) {
+            // Log the raw output for debugging, but only if it's not just whitespace.
+            if (line.trim()) {
+                console.error(`[FFMPEG_STDERR ${cameraId}]: ${line.trim()}`);
+            }
 
-        // Check for the "Opening... for writing" message which indicates a new segment file.
-        if (output.includes("Opening '") && output.includes(".ts' for writing")) {
-            const match = output.match(/Opening '([^']+)' for writing/);
-            if (match && match[1]) {
-                const segmentPath = match[1];
-                const segment = {
-                    filename: path.basename(segmentPath),
-                    startTime: Date.now(),
-                };
-                addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
+            // Check for the "Opening... for writing" message which indicates a new segment file.
+            if (line.includes("Opening '") && line.includes(".ts' for writing")) {
+                const match = line.match(/Opening '([^']+)' for writing/);
+                if (match && match[1]) {
+                    const segmentPath = match[1];
+                    const segment = {
+                        filename: path.basename(segmentPath),
+                        path: segmentPath,
+                        startTime: Date.now(),
+                    };
+                    addHlsSegment(cameraId, segment);
+                }
             }
         }
     });
