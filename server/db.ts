@@ -61,7 +61,7 @@ async function getDb(): Promise<Low<DbData>> {
 export async function getEvents(filters?: Partial<Event>): Promise<Event[]> {
     const db = await getDb();
     
-    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
     try {
         await db.read();
         db.data ||= defaultData;
@@ -86,7 +86,7 @@ export async function addEvent(eventData: Omit<Event, 'id' | 'timestamp'>): Prom
         ...eventData,
     };
 
-    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
     try {
         await db.read();
         db.data ||= defaultData;
@@ -104,7 +104,7 @@ export async function addEvent(eventData: Omit<Event, 'id' | 'timestamp'>): Prom
 
 export async function getEventById(id: string): Promise<Event | undefined> {
     const db = await getDb();
-    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
     try {
         await db.read();
         db.data ||= defaultData;
@@ -117,7 +117,7 @@ export async function getEventById(id: string): Promise<Event | undefined> {
 export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
     const db = await getDb();
     
-    const release = await lock(dbPath, { stale: 5000, realpath: false });
+    const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
     try {
         await db.read();
         db.data ||= defaultData;
