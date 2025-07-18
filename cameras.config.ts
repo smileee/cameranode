@@ -10,9 +10,9 @@ export const CAMERAS: Camera[] = [
     name: 'Cam 1 (BOX CAM)',
     rtspUrl: 'rtsp://192.168.9.232:554',
   }
-  // ,{
-  //   id: '2',
-  //   name: 'Cam 2 (PI CAM)',
-  //   rtspUrl: 'rtsp://192.168.9.161:554',
-  // }
+  ,{
+    id: '2',
+    name: 'Cam 2 (PI CAM)',
+    rtspUrl: 'rtsp://192.168.9.161:554',
+  }
 ]; 
