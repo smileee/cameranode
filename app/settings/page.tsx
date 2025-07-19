@@ -11,6 +11,22 @@ type CameraSettings = {
   };
 };
 
+const ToggleSwitch = ({ enabled, onChange }: { enabled: boolean; onChange: () => void }) => (
+  <button
+    type="button"
+    className={`${
+      enabled ? 'bg-blue-600' : 'bg-gray-200'
+    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+    onClick={onChange}
+  >
+    <span
+      className={`${
+        enabled ? 'translate-x-5' : 'translate-x-0'
+      } inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+    />
+  </button>
+);
+
 const SettingsPage = () => {
   const [cameraSettings, setCameraSettings] = useState<CameraSettings>({});
 
@@ -72,58 +88,54 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
-      <div className="space-y-4">
-        {CAMERAS.map(camera => (
-          <div key={camera.id} className="p-4 border rounded-lg">
-            <h2 className="text-xl font-semibold">{camera.name}</h2>
-            <div className="mt-2 space-y-2">
-              <h3 className="font-medium">Alerts</h3>
-              <div className="flex items-center justify-between">
-                <span>Dog</span>
-                <button
-                  onClick={() => handleToggle(camera.id, 'dog')}
-                  className={`px-4 py-2 rounded ${cameraSettings[camera.id]?.dog ? 'bg-green-500' : 'bg-gray-300'}`}
-                >
-                  {cameraSettings[camera.id]?.dog ? 'On' : 'Off'}
-                </button>
+    <div className="bg-gray-100 min-h-screen">
+      <div className="container mx-auto p-8">
+        <h1 className="text-4xl font-bold text-gray-800 mb-8">Settings</h1>
+        <div className="space-y-6">
+          {CAMERAS.map(camera => (
+            <div key={camera.id} className="bg-white p-6 rounded-xl shadow-md">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">{camera.name}</h2>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-700">Alert Triggers</h3>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium text-gray-800">Person Detected</span>
+                  <ToggleSwitch
+                    enabled={cameraSettings[camera.id]?.person ?? false}
+                    onChange={() => handleToggle(camera.id, 'person')}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium text-gray-800">Dog Detected</span>
+                  <ToggleSwitch
+                    enabled={cameraSettings[camera.id]?.dog ?? false}
+                    onChange={() => handleToggle(camera.id, 'dog')}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium text-gray-800">Bird Detected</span>
+                  <ToggleSwitch
+                    enabled={cameraSettings[camera.id]?.bird ?? false}
+                    onChange={() => handleToggle(camera.id, 'bird')}
+                  />
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span>Bird</span>
+              <div className="mt-6 pt-4 border-t border-gray-200 flex space-x-3">
                 <button
-                  onClick={() => handleToggle(camera.id, 'bird')}
-                  className={`px-4 py-2 rounded ${cameraSettings[camera.id]?.bird ? 'bg-green-500' : 'bg-gray-300'}`}
+                  onClick={() => handleDisconnect(camera.id)}
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors"
                 >
-                  {cameraSettings[camera.id]?.bird ? 'On' : 'Off'}
+                  Disconnect
                 </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Person</span>
                 <button
-                  onClick={() => handleToggle(camera.id, 'person')}
-                  className={`px-4 py-2 rounded ${cameraSettings[camera.id]?.person ? 'bg-green-500' : 'bg-gray-300'}`}
+                  onClick={() => handleEraseData(camera.id)}
+                  className="bg-yellow-400 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition-colors"
                 >
-                  {cameraSettings[camera.id]?.person ? 'On' : 'Off'}
+                  Erase Data
                 </button>
               </div>
             </div>
-            <div className="mt-4 flex space-x-2">
-              <button
-                onClick={() => handleDisconnect(camera.id)}
-                className="bg-red-500 text-white px-4 py-2 rounded"
-              >
-                Disconnect
-              </button>
-              <button
-                onClick={() => handleEraseData(camera.id)}
-                className="bg-yellow-500 text-white px-4 py-2 rounded"
-              >
-                Erase Data
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

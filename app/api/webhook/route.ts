@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addEvent } from '@/server/db';
+import { addEvent, getCameraSettings } from '@/server/db'; // Import getCameraSettings
 import { SPEAKERS } from '@/cameras.config';
 
 /**
@@ -94,7 +94,7 @@ async function triggerPersonBeep() {
 
 /**
  * Production webhook handler – parses the incoming JSON payload and saves an
- * event to the database. Keeps concise console logs for visibility.
+ * event to the database.
  */
 export async function POST(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -121,12 +121,19 @@ export async function POST(req: NextRequest) {
     // Basic validation – we at least expect a label.
     const label: string = payload.label ?? 'unknown';
 
-    // If we detect something, trigger the appropriate alert.
-    // This is done as a "fire-and-forget" and does not block the response.
-    if (label === 'dog' || label === 'bird') {
-        triggerAnimalAlert(label, 30);
-    } else if (label === 'person') {
-        triggerPersonBeep();
+    // Get camera-specific alert settings
+    const settings = await getCameraSettings();
+    const cameraSetting = settings[cameraId];
+
+    // Trigger alert only if enabled for this camera and this label
+    if (cameraSetting) {
+        if (label === 'dog' && cameraSetting.dog) {
+            triggerAnimalAlert('dog', 30);
+        } else if (label === 'bird' && cameraSetting.bird) {
+            triggerAnimalAlert('bird', 30);
+        } else if (label === 'person' && cameraSetting.person) {
+            triggerPersonBeep();
+        }
     }
 
     try {
