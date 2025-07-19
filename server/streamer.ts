@@ -56,6 +56,10 @@ async function startHlsStreamForCamera(camera: Camera) {
     await fs.rm(liveDir, { recursive: true, force: true });
     await fs.mkdir(liveDir, { recursive: true });
 
+    // The text to overlay on the video. Displays date and time.
+    // We need to escape colons for the drawtext filter.
+    const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
+
     const ffmpegArgs = [
         // Error Handling & Analysis
         '-err_detect', 'ignore_err', // Ignore all errors
@@ -69,6 +73,9 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-rtsp_transport', 'tcp',
         '-timeout', '10000000', // 10-second connection timeout
         '-i', camera.rtspUrl,
+
+        // Video Filter for Timestamp
+        '-vf', `drawtext=text='${timestampText}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=10`,
 
         // Output
         '-c:v', 'libx264',
