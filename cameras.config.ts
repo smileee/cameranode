@@ -4,6 +4,12 @@ export interface Camera {
   rtspUrl: string;
 }
 
+export interface Speaker {
+  id: string;
+  name: string;
+  rtspUrl: string;
+}
+
 export const CAMERAS: Camera[] = [
   {
     id: '1',
@@ -16,3 +22,11 @@ export const CAMERAS: Camera[] = [
     rtspUrl: 'rtsp://192.168.9.161:554',
   }
 ]; 
+
+export const SPEAKERS: Speaker[] = [
+  {
+    id: '1',
+    name: 'Speaker 1',
+    rtspUrl: 'http://192.168.9.111',
+  }
+];

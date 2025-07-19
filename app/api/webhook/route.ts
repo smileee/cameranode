@@ -1,5 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addEvent } from '@/server/db';
+import { SPEAKERS } from '@/cameras.config';
+
+/**
+ * Sends a request to the alert speaker for an animal. This is a fire-and-forget call.
+ */
+async function triggerAnimalAlert(animal: 'dog' | 'bird', duration: number) {
+    const speaker = SPEAKERS[0];
+    if (!speaker) {
+        console.log('[Alert] No speaker configured, skipping.');
+        return;
+    }
+
+    const url = `${speaker.rtspUrl}/alert`;
+    const payload = {
+        animal: animal,
+        duration: duration,
+    };
+
+    console.log(`[Alert] Triggering '${animal}' alert to ${url} for ${duration}s`);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const errorBody = await res.text();
+            console.error(
+                `[Alert] Failed to trigger animal alert. Speaker responded with ${res.status}: ${errorBody}`
+            );
+        }
+    } catch (error) {
+        console.error(`[Alert] Network error while triggering animal alert:`, error);
+    }
+}
+
+/**
+ * Sends a request to the speaker to make a simple beep.
+ */
+async function triggerPersonBeep() {
+    const speaker = SPEAKERS[0];
+    if (!speaker) {
+        console.log('[Alert] No speaker configured, skipping.');
+        return;
+    }
+
+    const url = `${speaker.rtspUrl}/beep`;
+    const payload = {
+        freq: 4000,
+        ms: 150,
+        times: 2,
+    };
+
+    console.log(`[Alert] Triggering 'person' beep to ${url}`);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const errorBody = await res.text();
+            console.error(
+                `[Alert] Failed to trigger person beep. Speaker responded with ${res.status}: ${errorBody}`
+            );
+        }
+    } catch (error) {
+        console.error(`[Alert] Network error while triggering person beep:`, error);
+    }
+}
 
 /**
  * Production webhook handler – parses the incoming JSON payload and saves an
@@ -29,6 +103,14 @@ export async function POST(req: NextRequest) {
 
     // Basic validation – we at least expect a label.
     const label: string = payload.label ?? 'unknown';
+
+    // If we detect something, trigger the appropriate alert.
+    // This is done as a "fire-and-forget" and does not block the response.
+    if (label === 'dog' || label === 'bird') {
+        triggerAnimalAlert(label, 30);
+    } else if (label === 'person') {
+        triggerPersonBeep();
+    }
 
     try {
         await addEvent({
