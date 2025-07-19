@@ -6,13 +6,14 @@ import { Camera, CAMERAS } from '../cameras.config';
 import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcesses } from './state';
 
 const HLS_OUTPUT_DIR = 'recordings';
-const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each video segment in seconds.
+const HLS_SEGMENT_DURATION_SECONDS = 6; // Duration of each video segment in seconds.
 
 // Keep a large playlist so ffmpeg doesn't delete segments too early. 
-// 1 hour = 3600 seconds. 3600s / 2s/segment = 1800 segments. We'll use 2000 to be safe.
-const HLS_LIST_SIZE = 2000;
+// We need to adjust this based on the new segment duration.
+// 1 hour = 3600 seconds. 3600s / 6s/segment = 600 segments. We'll use 800 to be safe.
+const HLS_LIST_SIZE = 800;
 const SEGMENT_BUFFER_RETENTION_MINUTES = 65; // Keep a little over an hour of segments on disk.
-const PRE_ROLL_BUFFER_SIZE = 30; // Number of segments to keep for pre-roll (e.g., 30 segments * 2s = 60s buffer).
+const PRE_ROLL_BUFFER_SIZE = 10; // Number of segments to keep for pre-roll (10 segments * 6s = 60s buffer).
 
 /**
  * Periodically cleans up old HLS segment files for a given camera.
@@ -94,6 +95,7 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-preset', 'ultrafast',
         '-tune', 'zerolatency',
         '-pix_fmt', 'yuv420p', // Standard pixel format for H.264
+        '-g', '60', // Force a keyframe every 60 frames (approx. 2-4 seconds)
         '-bsf:v', 'h264_mp4toannexb', // Bitstream filter for HLS
         '-an', // No audio
 
