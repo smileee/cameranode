@@ -22,6 +22,7 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   const [events, setEvents] = useState<DetectionEvent[]>(initialEvents);
   const liveStreamUrl = `/api/media/live/${camera.id}/live.m3u8`;
   const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
+  const [currentEventIndex, setCurrentEventIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const sortedInitial = [...initialEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -47,16 +48,34 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
 
   const handleGoLive = () => {
     setCurrentStreamUrl(liveStreamUrl);
+    setCurrentEventIndex(null);
   };
   
-  const handleEventClick = (event: DetectionEvent) => {
+  const handleEventClick = (event: DetectionEvent, index: number) => {
     if (event.recordingPath) {
       console.log(`Switching to event recording: ${event.recordingPath}`);
       setCurrentStreamUrl(event.recordingPath);
+      setCurrentEventIndex(index);
     } else {
       console.log(`No recording available for event: ${event.id}`);
     }
   };
+
+  const handleNavigation = (direction: 'previous' | 'next') => {
+    if (currentEventIndex === null) return;
+
+    const newIndex = direction === 'next' ? currentEventIndex - 1 : currentEventIndex + 1;
+
+    if (newIndex >= 0 && newIndex < events.length) {
+      const nextEvent = events[newIndex];
+      if (nextEvent.recordingPath) {
+        handleEventClick(nextEvent, newIndex);
+      } else {
+        console.warn(`Cannot navigate to event ${nextEvent.id}, no recording available.`);
+      }
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4">
@@ -71,21 +90,41 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
       </header>
 
       <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
-        <div className="md:col-span-2 h-full">
-          <LiveStream 
-            src={currentStreamUrl} 
-            controls={currentStreamUrl.endsWith('.mp4')} 
-          />
+        <div className="md:col-span-2 h-full flex flex-col">
+          <div className="flex-grow">
+            <LiveStream 
+              src={currentStreamUrl} 
+              controls={currentStreamUrl.endsWith('.mp4')} 
+            />
+          </div>
+          {currentEventIndex !== null && (
+            <div className="flex justify-center items-center gap-4 mt-4">
+              <button 
+                onClick={() => handleNavigation('previous')} 
+                disabled={currentEventIndex === null || currentEventIndex >= events.length - 1}
+                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded"
+              >
+                &larr; Previous Event
+              </button>
+              <button 
+                onClick={() => handleNavigation('next')}
+                disabled={currentEventIndex === null || currentEventIndex <= 0}
+                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded"
+              >
+                Next Event &rarr;
+              </button>
+            </div>
+          )}
         </div>
         <aside className="bg-gray-900 p-4 rounded-lg h-full overflow-y-auto">
           <h2 className="text-lg font-bold mb-4">Detection Events</h2>
           {events.length > 0 ? (
             <ul>
-              {events.map((event) => (
+              {events.map((event, index) => (
                 <li 
                   key={event.id} 
-                  className={`mb-4 p-2 bg-gray-800 rounded flex items-center gap-4 ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
-                  onClick={() => handleEventClick(event)}
+                  className={`mb-4 p-2 rounded flex items-center gap-4 ${currentEventIndex === index ? 'bg-blue-800' : 'bg-gray-800'} ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
+                  onClick={() => handleEventClick(event, index)}
                 >
                   {event.thumbnailPath && (
                     <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-24 h-16 object-cover rounded" />
