@@ -92,7 +92,7 @@ async function startHlsStreamForCamera(camera: Camera) {
 
         // Output
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
+        '-preset', 'veryfast',
         '-tune', 'zerolatency',
         '-pix_fmt', 'yuv420p', // Standard pixel format for H.264
         '-g', '60', // Force a keyframe every 60 frames (approx. 2-4 seconds)
