@@ -23,6 +23,15 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   const liveStreamUrl = `/api/media/live/${camera.id}/live.m3u8`;
   const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
   const [currentEventIndex, setCurrentEventIndex] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Effect to update the live clock every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const sortedInitial = [...initialEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -76,6 +85,7 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
     }
   };
 
+  const isLive = currentStreamUrl === liveStreamUrl;
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4">
@@ -90,7 +100,12 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
       </header>
 
       <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
-        <div className="md:col-span-2 h-full flex flex-col">
+        <div className="md:col-span-2 h-full flex flex-col relative">
+          {isLive && (
+            <div className="absolute top-2 right-2 z-10 bg-black bg-opacity-50 text-white p-2 rounded text-lg font-mono">
+              {currentTime.toLocaleString()}
+            </div>
+          )}
           <div className="flex-grow">
             <LiveStream 
               src={currentStreamUrl} 
