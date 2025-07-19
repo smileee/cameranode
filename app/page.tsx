@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Camera, CAMERAS } from '../cameras.config';
 import LiveStream from '@/components/LiveStream';
 import CameraCard from "@/components/CameraCard";
-import { IconPower } from '@tabler/icons-react';
+import { IconPower, IconSettings } from '@tabler/icons-react';
 
 export default function HomePage() {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -58,33 +58,12 @@ export default function HomePage() {
             <h1 className="text-5xl font-bold tracking-tighter">Câmeras</h1>
             <p className="text-neutral-400 mt-2">Selecione uma câmera para ver a transmissão ao vivo ou a biblioteca.</p>
             <div className="absolute top-0 right-0 flex flex-col items-end gap-2">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={handleCleanup}
-                  disabled={isCleaning}
-                  className="flex items-center gap-2 rounded-lg bg-yellow-900/50 px-4 py-2 text-yellow-300
-                             hover:bg-yellow-800/50 hover:text-yellow-200 transition-all duration-300
-                             disabled:opacity-50 disabled:cursor-wait"
-                >
-                  {isCleaning ? 'Cleaning...' : 'Clean Up Old Recordings'}
-                </button>
-                <button
-                  onClick={handleDisconnect}
-                  disabled={isDisconnecting}
-                  className="flex items-center gap-2 rounded-lg bg-red-900/50 px-4 py-2 text-red-300
-                             hover:bg-red-800/50 hover:text-red-200 transition-all duration-300
-                             disabled:opacity-50 disabled:cursor-wait"
-                >
-                  <IconPower size={18} />
-                  {isDisconnecting ? 'Disconnecting...' : 'Disconnect All'}
-                </button>
-              </div>
-              {message && <p className="text-sm text-neutral-500 text-right">{message}</p>}
-              {cleanupResult && (
-                <p className={`text-sm text-right ${cleanupResult.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
-                  {cleanupResult}
-                </p>
-              )}
+              <Link href="/settings">
+                <a className="flex items-center gap-2 rounded-lg bg-gray-800/50 px-4 py-2 text-gray-300 hover:bg-gray-700/50 hover:text-gray-200 transition-all duration-300">
+                  <IconSettings size={18} />
+                  <span>Settings</span>
+                </a>
+              </Link>
             </div>
         </header>
         <main>
