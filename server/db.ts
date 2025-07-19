@@ -116,6 +116,36 @@ export async function getEventById(id: string): Promise<Event | undefined> {
     return db.data.events.find(event => event.id === id);
 }
 
+export async function updateEvent(id: string, updates: Partial<Event>): Promise<Event | null> {
+    const db = await getDb();
+    const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
+    try {
+        await db.read();
+        db.data ||= defaultData;
+
+        const eventIndex = db.data.events.findIndex(event => event.id === id);
+        if (eventIndex === -1) {
+            console.warn(`[DB] updateEvent: Event with id ${id} not found.`);
+            return null;
+        }
+
+        const updatedEvent = {
+            ...db.data.events[eventIndex],
+            ...updates,
+        };
+        db.data.events[eventIndex] = updatedEvent;
+        await db.write();
+
+        console.log(`[DB] Event updated successfully: ${id}`);
+        return updatedEvent;
+    } catch (error) {
+        console.error(`[DB] Error updating event ${id}:`, error);
+        throw error;
+    } finally {
+        await release();
+    }
+}
+
 export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
     const db = await getDb();
     

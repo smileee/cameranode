@@ -5,12 +5,17 @@ import Hls from 'hls.js';
 
 interface LiveStreamProps {
   /**
-   * The URL of the HLS playlist file (live.m3u8).
+   * The URL of the HLS playlist file (live.m3u8) or a direct MP4 file.
    */
   src: string;
+  /**
+   * Whether to show the native video controls.
+   * Defaults to false.
+   */
+  controls?: boolean;
 }
 
-export default function LiveStream({ src }: LiveStreamProps) {
+export default function LiveStream({ src, controls = false }: LiveStreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -19,7 +24,7 @@ export default function LiveStream({ src }: LiveStreamProps) {
 
     let hls: Hls | null = null;
 
-    if (Hls.isSupported()) {
+    if (Hls.isSupported() && src.endsWith('m3u8')) {
       hls = new Hls();
       hls.loadSource(src);
       hls.attachMedia(video);
@@ -29,13 +34,19 @@ export default function LiveStream({ src }: LiveStreamProps) {
           // Browsers may prevent autoplay. We can show a play button here if needed.
         });
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (e.g., Safari)
+    } else if (video.canPlayType('application/vnd.apple.mpegurl') && src.endsWith('m3u8')) {
+      // Native HLS support (e.g., Safari) for live streams
       video.src = src;
       video.addEventListener('loadedmetadata', () => {
         video.play().catch(error => {
           console.log('[HLS Player] Native autoplay was prevented:', error);
         });
+      });
+    } else {
+      // Standard MP4 file
+      video.src = src;
+      video.play().catch(error => {
+        console.log('[MP4 Player] Autoplay was prevented:', error);
       });
     }
 
@@ -50,7 +61,7 @@ export default function LiveStream({ src }: LiveStreamProps) {
     <div className="w-full h-full bg-black">
       <video
         ref={videoRef}
-        controls
+        controls={controls}
         muted
         autoPlay
         playsInline

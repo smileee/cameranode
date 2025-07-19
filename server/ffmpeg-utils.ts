@@ -172,3 +172,52 @@ export function finalizeAndSaveRecording(
         }
     })();
 } 
+
+/**
+ * Creates a recording from a set of HLS segments.
+ * This involves concatenating the segments into a single MP4 and generating a thumbnail.
+ * @param eventId The ID of the event, used for naming the output files.
+ * @param cameraId The ID of the camera.
+ * @param segmentsToSave The list of segment filenames to include.
+ * @returns An object with the paths to the video and thumbnail, or null on failure.
+ */
+export async function createRecordingFromSegments(
+    eventId: string,
+    cameraId: string,
+    segmentsToSave: string[]
+): Promise<{ videoPath: string; thumbnailPath: string } | null> {
+    
+    const uniqueSegments = [...new Set(segmentsToSave)];
+    if (uniqueSegments.length === 0) {
+        console.warn(`[CreateRecording] No segments to save for event ${eventId}.`);
+        return null;
+    }
+
+    const liveDir = path.join(process.cwd(), 'recordings', cameraId, 'live');
+    const outputDir = path.join(process.cwd(), 'recordings', cameraId);
+    await fs.mkdir(outputDir, { recursive: true });
+    
+    const videoFileName = `rec-${eventId}.mp4`;
+    const videoPath = path.join(outputDir, videoFileName);
+
+    try {
+        const success = await concatenateSegments(uniqueSegments, liveDir, videoPath);
+
+        if (success) {
+            console.log(`[CreateRecording] Successfully created video for event ${eventId}: ${videoPath}`);
+            const thumbnailPath = await generateThumbnail(videoPath);
+            if (thumbnailPath) {
+                return {
+                    videoPath: `/api/media/${cameraId}/${videoFileName}`,
+                    thumbnailPath: `/api/media/${cameraId}/${path.basename(thumbnailPath)}`,
+                };
+            }
+        } else {
+            console.error(`[CreateRecording] Failed to create video for event ${eventId}.`);
+        }
+    } catch (error) {
+        console.error(`[CreateRecording] An unexpected error occurred during creation for event ${eventId}:`, error);
+    }
+
+    return null;
+} 

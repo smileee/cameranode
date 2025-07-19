@@ -4,7 +4,8 @@ export interface Event {
     cameraId: string;
     type: 'detection' | 'custom';
     label: string;
-    status: 'pending' | 'processed' | 'error';
-    videoPath?: string;
+    status?: 'pending' | 'processed' | 'error' | 'completed' | 'failed';
+    recordingPath?: string;
+    thumbnailPath?: string;
     payload?: any;
 } 

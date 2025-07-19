@@ -10,6 +10,7 @@ interface DetectionEvent {
   label: string;
   payload?: any;
   recordingPath?: string; // <-- Add recordingPath
+  thumbnailPath?: string;
 }
 
 interface ClientPageProps {
@@ -71,7 +72,10 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
 
       <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
         <div className="md:col-span-2 h-full">
-          <LiveStream src={currentStreamUrl} />
+          <LiveStream 
+            src={currentStreamUrl} 
+            controls={currentStreamUrl.endsWith('.mp4')} 
+          />
         </div>
         <aside className="bg-gray-900 p-4 rounded-lg h-full overflow-y-auto">
           <h2 className="text-lg font-bold mb-4">Detection Events</h2>
@@ -80,13 +84,18 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
               {events.map((event) => (
                 <li 
                   key={event.id} 
-                  className={`mb-4 p-2 bg-gray-800 rounded ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
+                  className={`mb-4 p-2 bg-gray-800 rounded flex items-center gap-4 ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
                   onClick={() => handleEventClick(event)}
                 >
-                  <p className="font-bold text-blue-400">{event.label}</p>
-                  <p className="text-sm text-gray-400">
-                    {new Date(event.timestamp).toLocaleString()}
-                  </p>
+                  {event.thumbnailPath && (
+                    <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-24 h-16 object-cover rounded" />
+                  )}
+                  <div>
+                    <p className="font-bold text-blue-400">{event.label}</p>
+                    <p className="text-sm text-gray-400">
+                      {new Date(event.timestamp).toLocaleString()}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

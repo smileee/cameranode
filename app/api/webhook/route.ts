@@ -3,6 +3,23 @@ import { addEvent } from '@/server/db';
 import { SPEAKERS } from '@/cameras.config';
 
 /**
+ * After an event is saved, trigger the finalization of its recording.
+ * This is a fire-and-forget call to our own API.
+ */
+function triggerFinalization(eventId: string, req: NextRequest) {
+  const host = req.headers.get('host');
+  const protocol = req.headers.get('x-forwarded-proto') || 'http';
+  const url = `${protocol}://${host}/api/events/${eventId}/finalize`;
+
+  console.log(`[Webhook] Triggering finalization for event ${eventId} at ${url}`);
+
+  // We don't await this, we want it to run in the background.
+  fetch(url, { method: 'POST' }).catch((err) => {
+    console.error(`[Webhook] Failed to trigger finalization for event ${eventId}:`, err);
+  });
+}
+
+/**
  * Sends a request to the alert speaker for an animal. This is a fire-and-forget call.
  */
 async function triggerAnimalAlert(animal: 'dog' | 'bird', duration: number) {
@@ -113,15 +130,18 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        await addEvent({
+        const newEvent = await addEvent({
             cameraId: String(cameraId),
             type: 'detection',
             label,
             payload,
             status: 'pending',
-        } as any);
+        });
 
-        console.log(`[Webhook] Event saved for camera ${cameraId}: ${label}`);
+        // After the event is successfully saved, trigger the finalization process.
+        triggerFinalization(newEvent.id, req);
+
+        console.log(`[Webhook] Event saved for camera ${cameraId}: ${label} (id: ${newEvent.id})`);
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error('[Webhook] Failed to save event:', error);
