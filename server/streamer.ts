@@ -52,9 +52,20 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     console.log(`[HLS ${cameraId}] Initializing stream. Output directory: ${liveDir}`);
 
-    // Clean up the live directory from previous runs.
-    await fs.rm(liveDir, { recursive: true, force: true });
+    // --- Robust Directory Cleanup ---
+    // Ensure the directory exists.
     await fs.mkdir(liveDir, { recursive: true });
+
+    // Clean up files from previous runs inside the directory.
+    try {
+        const files = await fs.readdir(liveDir);
+        for (const file of files) {
+            await fs.unlink(path.join(liveDir, file));
+        }
+    } catch (error) {
+        console.error(`[HLS ${cameraId}] Failed to clean up live directory contents:`, error);
+        // We can still proceed, ffmpeg might just overwrite files.
+    }
 
     // The text to overlay on the video. Displays date and time.
     // We need to escape colons for the drawtext filter.
