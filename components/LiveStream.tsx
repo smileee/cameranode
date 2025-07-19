@@ -13,11 +13,12 @@ interface LiveStreamProps {
    * Defaults to false.
    */
   controls?: boolean;
-  videoRef: RefObject<HTMLVideoElement>; // Accept a ref from the parent
+  videoRef?: RefObject<HTMLVideoElement>; // Make the ref optional
 }
 
-export default function LiveStream({ src, controls = false, videoRef }: LiveStreamProps) {
-  // const videoRef = useRef<HTMLVideoElement>(null); // Ref is now passed in
+export default function LiveStream({ src, controls = false, videoRef: parentRef }: LiveStreamProps) {
+  const internalRef = useRef<HTMLVideoElement>(null);
+  const videoRef = parentRef || internalRef; // Use parent ref if provided, otherwise use internal
 
   useEffect(() => {
     const video = videoRef.current;
