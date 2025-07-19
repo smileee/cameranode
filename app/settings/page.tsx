@@ -1,25 +1,64 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CAMERAS } from '../../cameras.config';
 
-const SettingsPage = () => {
-  const [cameraSettings, setCameraSettings] = useState(() => {
-    const initialSettings: { [key: string]: { dog: boolean; bird: boolean; person: boolean } } = {};
-    CAMERAS.forEach(camera => {
-      initialSettings[camera.id] = { dog: false, bird: false, person: false };
-    });
-    return initialSettings;
-  });
+type CameraSettings = {
+  [key: string]: {
+    dog: boolean;
+    bird: boolean;
+    person: boolean;
+  };
+};
 
-  const handleToggle = (cameraId: string, alertType: 'dog' | 'bird' | 'person') => {
-    setCameraSettings(prev => ({
-      ...prev,
+const SettingsPage = () => {
+  const [cameraSettings, setCameraSettings] = useState<CameraSettings>({});
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const data = await response.json();
+          // Initialize settings for cameras not in the DB
+          const initialSettings: CameraSettings = {};
+          CAMERAS.forEach(camera => {
+            initialSettings[camera.id] = data[camera.id] || { dog: false, bird: false, person: false };
+          });
+          setCameraSettings(initialSettings);
+        } else {
+          console.error('Failed to fetch settings');
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  const handleToggle = async (cameraId: string, alertType: 'dog' | 'bird' | 'person') => {
+    const newSettings = {
+      ...cameraSettings,
       [cameraId]: {
-        ...prev[cameraId],
-        [alertType]: !prev[cameraId][alertType],
+        ...cameraSettings[cameraId],
+        [alertType]: !cameraSettings[cameraId][alertType],
       },
-    }));
+    };
+    setCameraSettings(newSettings);
+
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newSettings),
+      });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      // Optionally revert state on error
+    }
   };
 
   const handleDisconnect = (cameraId: string) => {
