@@ -58,7 +58,8 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     // The text to overlay on the video. Displays date and time.
     // We need to escape colons for the drawtext filter.
-    const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
+    // REMOVED: This was causing instability with the camera's RTSP stream.
+    // const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
 
     const ffmpegArgs = [
         // Error Handling & Analysis
@@ -74,8 +75,8 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-timeout', '10000000', // 10-second connection timeout
         '-i', camera.rtspUrl,
 
-        // Video Filter for Timestamp
-        '-vf', `drawtext=text='${timestampText}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=10`,
+        // Video Filter for Timestamp - REMOVED FOR STABILITY
+        // '-vf', `drawtext=text='${timestampText}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=10`,
 
         // Output
         '-c:v', 'libx264',
