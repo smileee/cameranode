@@ -7,14 +7,7 @@ const MEDIA_DIR = 'recordings';
 
 /**
  * Serves media files (HLS playlists, video segments, MP4 recordings, and JPG thumbnails)
- * from the 'recordings' directory. It uses a generic slug-based path.
- *
- * URL structure: /api/media/[...pathParts]
- * e.g.,
- * - HLS Playlist: /api/media/1/live/live.m3u8
- * - HLS Segment:  /api/media/1/live/segment123.ts
- * - MP4 Recording: /api/media/1/rec-abc123.mp4
- * - JPG Thumbnail: /api/media/1/thumb-abc123.jpg
+ * from the 'recordings' directory.
  */
 export async function GET(request: Request, { params }: { params: { slug: string[] } }) {
     const slug = params.slug;
@@ -23,8 +16,22 @@ export async function GET(request: Request, { params }: { params: { slug: string
         return new Response('Invalid media path', { status: 400 });
     }
 
-    // The slug array is the path parts. Join them to form the relative path.
-    const relativePath = slug.join('/');
+    let relativePath: string;
+
+    // Handle the special case for live HLS streams
+    if (slug[0] === 'live' && slug.length > 2) {
+        // URL: /api/media/live/[cameraId]/[...filename]
+        // Maps to: recordings/[cameraId]/live/[...filename]
+        const [_live, cameraId, ...rest] = slug;
+        const liveFileName = rest.join('/');
+        relativePath = path.join(cameraId, 'live', liveFileName);
+    } else {
+        // Standard path for recordings and thumbnails
+        // URL: /api/media/[cameraId]/[filename]
+        // Maps to: recordings/[cameraId]/[filename]
+        relativePath = slug.join('/');
+    }
+
     const filePath = path.join(process.cwd(), MEDIA_DIR, relativePath);
 
     // --- Security Check ---
