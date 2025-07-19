@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
 import Hls from 'hls.js';
 
 interface LiveStreamProps {
@@ -13,10 +13,11 @@ interface LiveStreamProps {
    * Defaults to false.
    */
   controls?: boolean;
+  videoRef: RefObject<HTMLVideoElement>; // Accept a ref from the parent
 }
 
-export default function LiveStream({ src, controls = false }: LiveStreamProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+export default function LiveStream({ src, controls = false, videoRef }: LiveStreamProps) {
+  // const videoRef = useRef<HTMLVideoElement>(null); // Ref is now passed in
 
   useEffect(() => {
     const video = videoRef.current;
@@ -55,7 +56,7 @@ export default function LiveStream({ src, controls = false }: LiveStreamProps) {
         hls.destroy();
       }
     };
-  }, [src]);
+  }, [src, videoRef]);
 
   return (
     <div className="w-full h-full bg-black">

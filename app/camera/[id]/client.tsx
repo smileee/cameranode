@@ -2,7 +2,8 @@
 
 import { Camera } from '@/cameras.config';
 import LiveStream from '@/components/LiveStream';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { Timeline, Event } from 'react-timeline-scribble';
 
 interface DetectionEvent {
   id: string;
@@ -21,9 +22,13 @@ interface ClientPageProps {
 export default function ClientPage({ camera, events: initialEvents }: ClientPageProps) {
   const [events, setEvents] = useState<DetectionEvent[]>(initialEvents);
   const liveStreamUrl = `/api/media/live/${camera.id}/live.m3u8`;
+  const dvrStreamUrl = `/api/camera/${camera.id}/dvr`;
+
   const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
-  const [currentEventIndex, setCurrentEventIndex] = useState<number | null>(null);
+  const [isLive, setIsLive] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Effect to update the live clock every second
   useEffect(() => {
@@ -34,15 +39,11 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   }, []);
 
   useEffect(() => {
-    const sortedInitial = [...initialEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    setEvents(sortedInitial);
-
     const fetchEvents = async () => {
       try {
         const response = await fetch(`/api/events?cameraId=${camera.id}`);
         if (response.ok) {
           const newEvents: DetectionEvent[] = await response.json();
-          newEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           setEvents(newEvents);
         }
       } catch (error) {
@@ -57,35 +58,37 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
 
   const handleGoLive = () => {
     setCurrentStreamUrl(liveStreamUrl);
-    setCurrentEventIndex(null);
+    setIsLive(true);
   };
-  
-  const handleEventClick = (event: DetectionEvent, index: number) => {
-    if (event.recordingPath) {
-      console.log(`Switching to event recording: ${event.recordingPath}`);
-      setCurrentStreamUrl(event.recordingPath);
-      setCurrentEventIndex(index);
+
+  const handleGoDvr = () => {
+    setCurrentStreamUrl(dvrStreamUrl);
+    setIsLive(false);
+  };
+
+  const handleTimelineEventClick = (timestamp: string) => {
+    // This is a simplified example.
+    // A more robust solution would calculate the exact second to seek to
+    // based on the event's timestamp relative to the start of the DVR buffer.
+    if (videoRef.current) {
+      // For now, just switch to DVR mode. Seeking requires more info.
+      handleGoDvr();
+      console.log(`Timeline event clicked: ${timestamp}. Seeking logic to be implemented.`);
+    }
+  };
+
+  // This function is now simplified as it's only for displaying the list
+  const handleEventListClick = (event: DetectionEvent) => {
+    if (isLive) {
+      // If we're live, maybe switch to DVR mode and seek? For now, just log.
+      console.log('Event clicked from list while live:', event.id);
+      handleTimelineEventClick(event.timestamp);
     } else {
-      console.log(`No recording available for event: ${event.id}`);
+      // If already in DVR mode, seek to the event time
+      console.log('Event clicked from list in DVR mode:', event.id);
+      handleTimelineEventClick(event.timestamp);
     }
   };
-
-  const handleNavigation = (direction: 'previous' | 'next') => {
-    if (currentEventIndex === null) return;
-
-    const newIndex = direction === 'next' ? currentEventIndex - 1 : currentEventIndex + 1;
-
-    if (newIndex >= 0 && newIndex < events.length) {
-      const nextEvent = events[newIndex];
-      if (nextEvent.recordingPath) {
-        handleEventClick(nextEvent, newIndex);
-      } else {
-        console.warn(`Cannot navigate to event ${nextEvent.id}, no recording available.`);
-      }
-    }
-  };
-
-  const isLive = currentStreamUrl === liveStreamUrl;
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4">
@@ -94,9 +97,14 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
           <a href="/" className="text-blue-400 hover:underline">&larr; Back to Cameras</a>
           <h1 className="text-2xl font-bold mt-2">{camera.name}</h1>
         </div>
-        <button onClick={handleGoLive} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
-          Go Live
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={handleGoLive} className={`font-bold py-2 px-4 rounded transition-colors ${isLive ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
+            Live
+          </button>
+          <button onClick={handleGoDvr} className={`font-bold py-2 px-4 rounded transition-colors ${!isLive ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
+            DVR
+          </button>
+        </div>
       </header>
 
       <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
@@ -107,27 +115,29 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
             </div>
           )}
           <div className="flex-grow">
-            <LiveStream 
-              src={currentStreamUrl} 
-              controls={currentStreamUrl.endsWith('.mp4')} 
+            <LiveStream
+              src={currentStreamUrl}
+              videoRef={videoRef} // Pass ref to LiveStream component
+              controls={!isLive} // Show controls only in DVR mode
             />
           </div>
-          {currentEventIndex !== null && (
-            <div className="flex justify-center items-center gap-4 mt-4">
-              <button 
-                onClick={() => handleNavigation('previous')} 
-                disabled={currentEventIndex === null || currentEventIndex >= events.length - 1}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded"
-              >
-                &larr; Previous Event
-              </button>
-              <button 
-                onClick={() => handleNavigation('next')}
-                disabled={currentEventIndex === null || currentEventIndex <= 0}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded"
-              >
-                Next Event &rarr;
-              </button>
+          {!isLive && (
+            <div className="w-full p-4 bg-gray-900 rounded-lg mt-4">
+              <h3 className="text-lg font-bold mb-2">Recorded Events</h3>
+              <div className="h-48 overflow-y-auto">
+                <Timeline>
+                  {events.map((event) => (
+                    <Event
+                      key={event.id}
+                      interval={new Date(event.timestamp).toLocaleString()}
+                      title={event.label}
+                      onClick={() => handleTimelineEventClick(event.timestamp)}
+                    >
+                      {/* You can add more details here if you want */}
+                    </Event>
+                  ))}
+                </Timeline>
+              </div>
             </div>
           )}
         </div>
@@ -136,10 +146,10 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
           {events.length > 0 ? (
             <ul>
               {events.map((event, index) => (
-                <li 
-                  key={event.id} 
-                  className={`mb-4 p-2 rounded flex items-center gap-4 ${currentEventIndex === index ? 'bg-blue-800' : 'bg-gray-800'} ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
-                  onClick={() => handleEventClick(event, index)}
+                <li
+                  key={event.id}
+                  className={`mb-4 p-2 rounded flex items-center gap-4 cursor-pointer hover:bg-gray-700 bg-gray-800`}
+                  onClick={() => handleEventListClick(event)}
                 >
                   {event.thumbnailPath && (
                     <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-24 h-16 object-cover rounded" />
