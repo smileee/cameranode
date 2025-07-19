@@ -69,7 +69,7 @@ async function startHlsStreamForCamera(camera: Camera) {
 
         // Input
         '-hide_banner',
-        '-loglevel', 'error', // More verbose logs for debugging connection issues
+        '-loglevel', 'verbose', // Use 'verbose' to get segment creation messages
         '-rtsp_transport', 'tcp',
         '-timeout', '10000000', // 10-second connection timeout
         '-i', camera.rtspUrl,

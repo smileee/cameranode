@@ -158,41 +158,10 @@ export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
         await release();
     }
 
-    const cameraEvents = db.data.events
+    // The event now contains the direct paths to its recordings.
+    // We no longer need to manually look for files on the disk here.
+    // The finalize process is responsible for updating the event with the correct paths.
+    return db.data.events
         .filter(event => event.cameraId === cameraId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    // Now, let's find the associated recordings
-    const cameraRecordingsDir = path.join(recordingsDir, cameraId);
-    let recordingFiles: string[] = [];
-    try {
-        recordingFiles = await fs.readdir(cameraRecordingsDir);
-    } catch (error: any) {
-        if (error.code !== 'ENOENT') {
-            console.error(`[DB] Could not read recordings directory for camera ${cameraId}:`, error);
-        }
-        // If the directory doesn't exist, we just return the events without recordings.
-        return cameraEvents;
-    }
-
-    const mp4Files = recordingFiles.filter(file => file.endsWith('.mp4'));
-
-    // Augment events with their recording path if available
-    return cameraEvents.map(event => {
-        // The recording filename is generated in finalizeAndSaveRecording
-        // e.g., 'rec-person-2023-10-27T12-30-00-000Z.mp4'
-        const eventTimestamp = new Date(event.timestamp).toISOString().replace(/[:.]/g, '-');
-        const expectedFileNamePrefix = `rec-${event.label}-${eventTimestamp.substring(0, 19)}`; // Match up to the second
-
-        const recordingFile = mp4Files.find(file => file.startsWith(expectedFileNamePrefix));
-
-        if (recordingFile) {
-            return {
-                ...event,
-                recordingPath: `/api/media/${cameraId}/${recordingFile}`
-            };
-        }
-
-        return event;
-    });
 } 
