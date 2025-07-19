@@ -9,6 +9,7 @@ interface DetectionEvent {
   timestamp: string;
   label: string;
   payload?: any;
+  recordingPath?: string; // <-- Add recordingPath
 }
 
 interface ClientPageProps {
@@ -48,11 +49,12 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   };
   
   const handleEventClick = (event: DetectionEvent) => {
-    // When an event is clicked, we can switch the stream to the recorded media file.
-    // For now, let's just log it and prepare for future implementation.
-    console.log(`Switching to event: ${event.id}`);
-    // Example of what it could be:
-    // setCurrentStreamUrl(`/api/media/${event.id}`);
+    if (event.recordingPath) {
+      console.log(`Switching to event recording: ${event.recordingPath}`);
+      setCurrentStreamUrl(event.recordingPath);
+    } else {
+      console.log(`No recording available for event: ${event.id}`);
+    }
   };
 
   return (
@@ -76,7 +78,11 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
           {events.length > 0 ? (
             <ul>
               {events.map((event) => (
-                <li key={event.id} className="mb-4 p-2 bg-gray-800 rounded cursor-pointer hover:bg-gray-700" onClick={() => handleEventClick(event)}>
+                <li 
+                  key={event.id} 
+                  className={`mb-4 p-2 bg-gray-800 rounded ${event.recordingPath ? 'cursor-pointer hover:bg-gray-700' : 'cursor-not-allowed opacity-60'}`} 
+                  onClick={() => handleEventClick(event)}
+                >
                   <p className="font-bold text-blue-400">{event.label}</p>
                   <p className="text-sm text-gray-400">
                     {new Date(event.timestamp).toLocaleString()}

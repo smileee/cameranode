@@ -4,8 +4,10 @@ import path from 'path';
 import { Event } from '@/types/event';
 import { lock, unlock } from 'proper-lockfile';
 import { nanoid } from 'nanoid';
+import { promises as fs } from 'fs';
 
 const dbPath = path.join(process.cwd(), 'db.json');
+const recordingsDir = path.join(process.cwd(), 'recordings');
 
 type DbData = {
     events: Event[];
@@ -117,6 +119,7 @@ export async function getEventById(id: string): Promise<Event | undefined> {
 export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
     const db = await getDb();
     
+    // Lock the DB file for reading
     const release = await lock(dbPath, { stale: 5000, realpath: false, retries: { retries: 5, factor: 1.2, minTimeout: 100 } });
     try {
         await db.read();
@@ -125,7 +128,41 @@ export async function getEventsForCamera(cameraId: string): Promise<Event[]> {
         await release();
     }
 
-    return db.data.events
+    const cameraEvents = db.data.events
         .filter(event => event.cameraId === cameraId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Now, let's find the associated recordings
+    const cameraRecordingsDir = path.join(recordingsDir, cameraId);
+    let recordingFiles: string[] = [];
+    try {
+        recordingFiles = await fs.readdir(cameraRecordingsDir);
+    } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+            console.error(`[DB] Could not read recordings directory for camera ${cameraId}:`, error);
+        }
+        // If the directory doesn't exist, we just return the events without recordings.
+        return cameraEvents;
+    }
+
+    const mp4Files = recordingFiles.filter(file => file.endsWith('.mp4'));
+
+    // Augment events with their recording path if available
+    return cameraEvents.map(event => {
+        // The recording filename is generated in finalizeAndSaveRecording
+        // e.g., 'rec-person-2023-10-27T12-30-00-000Z.mp4'
+        const eventTimestamp = new Date(event.timestamp).toISOString().replace(/[:.]/g, '-');
+        const expectedFileNamePrefix = `rec-${event.label}-${eventTimestamp.substring(0, 19)}`; // Match up to the second
+
+        const recordingFile = mp4Files.find(file => file.startsWith(expectedFileNamePrefix));
+
+        if (recordingFile) {
+            return {
+                ...event,
+                recordingPath: `/api/media/${cameraId}/${recordingFile}`
+            };
+        }
+
+        return event;
+    });
 } 
