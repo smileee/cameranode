@@ -65,7 +65,7 @@ export async function checkStreamHealth(): Promise<StreamHealth[]> {
       const now = Date.now();
       const isHealthy = hasPlaylist && 
                        segmentCount > 0 && 
-                       lastSegmentTime && 
+                       lastSegmentTime !== null && 
                        (now - lastSegmentTime) < 30000; // Less than 30 seconds old
 
       results.push({
@@ -116,7 +116,4 @@ export function startStreamMonitoring() {
       console.log('[Monitor] All streams healthy');
     }
   }, 30000);
-}
-
-// Export for use in other modules
-export { checkStreamHealth }; 
+} 
