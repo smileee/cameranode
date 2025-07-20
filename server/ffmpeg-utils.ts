@@ -2,6 +2,11 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { HlsSegment } from './state';
+import { Camera } from '@/cameras.config';
+
+// Constants for HLS streaming
+const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each segment in seconds
+const HLS_MAX_SEGMENTS_IN_PLAYLIST = 5; // Number of segments to keep in the playlist
 
 const resolveFfmpegPath = () => {
     try {
@@ -260,8 +265,8 @@ export function getFfmpegArgs(rtspUrl: string, hlsOutputPath: string) {
 
         // HLS options
         '-f', 'hls',
-        '-hls_time', '2',
-        '-hls_list_size', '5',
+        '-hls_time', String(HLS_SEGMENT_DURATION_SECONDS),
+        '-hls_list_size', String(HLS_MAX_SEGMENTS_IN_PLAYLIST),
         '-hls_flags', 'delete_segments',
         '-hls_segment_filename', path.join(hlsOutputPath, 'segment%06d.ts'),
         path.join(hlsOutputPath, 'live.m3u8')
