@@ -73,39 +73,21 @@ async function startHlsStreamForCamera(camera: Camera) {
     // REMOVED: This was causing instability with the camera's RTSP stream.
     // const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
 
+    // Replace existing ffmpegArgs array
     const ffmpegArgs = [
-        // Error Handling & Analysis
-        '-err_detect', 'ignore_err', // Ignore all errors
-        '-probesize', '5M',
-        '-analyzeduration', '5M',
-        '-fflags', '+genpts+discardcorrupt+nobuffer', // Generate timestamps, discard corrupted packets, and disable buffering
-
-        // Input
-        '-hide_banner',
-        '-loglevel', 'verbose', // Use 'verbose' to get segment creation messages
         '-rtsp_transport', 'tcp',
-        '-timeout', '10000000', // 10-second connection timeout
         '-i', camera.rtspUrl,
 
-        // Video Filter for Timestamp - REMOVED FOR STABILITY
-        // '-vf', `drawtext=text='${timestampText}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=10`,
+        // Copy video without re-encoding for maximum stability
+        '-c:v', 'copy',
+        '-an', // disable audio
 
-        // Output
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'zerolatency',
-        '-pix_fmt', 'yuv420p', // Standard pixel format for H.264
-        '-g', '60', // Force a keyframe every 60 frames (approx. 2-4 seconds)
-        '-bsf:v', 'h264_mp4toannexb', // Bitstream filter for HLS
-        '-an', // No audio
-
-        // HLS options
+        // HLS parameters – short segments and small playlist for low latency
         '-f', 'hls',
-        '-hls_time', HLS_SEGMENT_DURATION_SECONDS.toString(),
-        '-hls_list_size', HLS_LIST_SIZE.toString(),
-        // We manage segment deletion manually to ensure they exist for the processor.
-        '-hls_flags', 'program_date_time',
-        '-hls_segment_filename', path.join(liveDir, 'segment%06d.ts'), // e.g., segment000001.ts
+        '-hls_time', '2',
+        '-hls_list_size', '5',
+        '-hls_flags', 'delete_segments',
+        '-hls_segment_filename', path.join(liveDir, 'segment%06d.ts'),
         path.join(liveDir, 'live.m3u8'),
     ];
 
