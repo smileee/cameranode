@@ -175,6 +175,42 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
     fetchRecordings();
   }, [activeTab, camera.id]);
 
+  const handleLibraryEventClick = (event: DetectionEvent) => {
+    // Find the corresponding recording file
+    const eventTime = new Date(event.timestamp).getTime();
+    
+    // Find the recording that CONTAINS this event time
+    // This is a simplification; a more robust solution would check start/end times.
+    // For now, we find the closest recording STARTING BEFORE the event.
+    const associatedRecording = recordings
+        .map(r => ({ ...r, createdAtTime: new Date(r.createdAt).getTime() }))
+        .filter(r => r.createdAtTime <= eventTime)
+        .sort((a, b) => b.createdAtTime - a.createdAtTime)[0];
+
+    if (associatedRecording && videoRef.current) {
+        // If the video is not already playing this recording, switch to it
+        if (!currentStreamUrl.endsWith(associatedRecording.filename)) {
+            handlePlayRecording(associatedRecording.url);
+        }
+
+        // We need a small delay to allow the video to load before seeking
+        setTimeout(() => {
+            if (videoRef.current) {
+                // The seek time is the difference between the event and the start of the video file
+                const recordingStartTime = new Date(associatedRecording.createdAt).getTime();
+                const seekTime = (eventTime - recordingStartTime) / 1000;
+                
+                if (seekTime >= 0) {
+                    videoRef.current.currentTime = seekTime;
+                    videoRef.current.play();
+                }
+            }
+        }, 500); // 500ms delay might need adjustment
+    } else {
+        console.warn('Could not find associated recording for this event.');
+    }
+  };
+
   const handlePlayRecording = (url: string) => {
     setCurrentStreamUrl(url);
     setIsLive(false); // Switch to "DVR" mode to show controls
@@ -252,46 +288,47 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
           </div>
 
           {activeTab === 'library' && (
-            <div className="w-full p-4 bg-muted/50 border border-border rounded-lg mt-4">
-              <h3 className="text-lg font-semibold mb-2">Recorded Files</h3>
-              <div className="h-40 overflow-y-auto">
-                {recordings.length > 0 ? (
-                  <ul className="space-y-2">
-                    {recordings.map((rec) => (
-                      <li key={rec.filename} onClick={() => handlePlayRecording(rec.url)} className="p-2 rounded-md hover:bg-accent cursor-pointer flex justify-between items-center">
-                        <div>
-                          <p className="font-medium">{rec.filename}</p>
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {/* Recordings List */}
+              <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">Recorded Files</h3>
+                <div className="h-40 overflow-y-auto">
+                  {recordings.length > 0 ? (
+                    <ul className="space-y-2">
+                      {recordings.map((rec) => (
+                        <li key={rec.filename} onClick={() => handlePlayRecording(rec.url)} className="p-2 rounded-md hover:bg-accent cursor-pointer flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{rec.filename}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(rec.createdAt).toLocaleString()}
+                            </p>
+                          </div>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(rec.createdAt).toLocaleString()}
+                            {(rec.size / 1024 / 1024).toFixed(2)} MB
                           </p>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {(rec.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground">No recordings found.</p>
-                )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground">No recordings found.</p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-
-          {!isLive && activeTab !== 'library' && (
-            <div className="w-full p-4 bg-muted/50 border border-border rounded-lg mt-4">
-              <h3 className="text-lg font-semibold mb-2">Recorded Events</h3>
-              <div className="h-40 overflow-y-auto">
-                <Timeline>
-                  {events.map((event) => (
-                    <Event
-                      key={event.id}
-                      interval={new Date(event.timestamp).toLocaleString()}
-                      title={event.label}
-                      onClick={() => handleTimelineEventClick(event.timestamp)}
-                    />
-                  ))}
-                </Timeline>
+              {/* Event Timeline */}
+              <div className="p-4 bg-muted/50 border border-border rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">Event Timeline</h3>
+                <div className="h-40 overflow-y-auto">
+                  <Timeline>
+                    {events.map((event) => (
+                      <Event
+                        key={event.id}
+                        interval={new Date(event.timestamp).toLocaleString()}
+                        title={event.label}
+                        onClick={() => handleLibraryEventClick(event)}
+                      />
+                    ))}
+                  </Timeline>
+                </div>
               </div>
             </div>
           )}
@@ -310,7 +347,7 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
                 <li
                   key={event.id}
                   className="mb-2 p-2 rounded-md flex items-center gap-3 cursor-pointer hover:bg-accent"
-                  onClick={() => handleEventListClick(event)}
+                  onClick={() => activeTab === 'library' ? handleLibraryEventClick(event) : handleEventListClick(event)}
                 >
                   {event.thumbnailPath ? (
                     <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-20 h-12 object-cover rounded-md bg-muted" />
