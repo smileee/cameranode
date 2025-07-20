@@ -138,7 +138,7 @@ async function startHlsStreamForCamera(camera: Camera) {
         codecArgs: string[]
     ) => [
         '-rtsp_transport','tcp',
-        '-stimeout','10000000', // 10 second timeout for RTSP connection
+        // '-stimeout','10000000', // REMOVIDO: não suportado em alguns builds do ffmpeg
         '-reconnect','1', // Enable reconnection
         '-reconnect_at_eof','1', // Reconnect at end of file
         '-reconnect_streamed','1', // Reconnect for streamed content
