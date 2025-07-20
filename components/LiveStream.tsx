@@ -83,6 +83,15 @@ export default function LiveStream({ src, controls = false, videoRef: parentRef,
           }
       });
 
+      // When the manifest is parsed, the stream is ready to play.
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          console.log('[HLS] Manifest parsed, playing video.');
+          setIsLoading(false);
+          video.play().catch(error => {
+              console.error('[HLS Player] Autoplay was prevented:', error);
+          });
+      });
+
       hls.loadSource(src);
       hls.attachMedia(video);
     } else if (video.canPlayType('application/vnd.apple.mpegurl') && src.endsWith('m3u8')) {
