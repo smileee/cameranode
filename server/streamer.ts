@@ -141,6 +141,7 @@ async function startHlsStreamForCamera(camera: Camera) {
             '-i', camera.rtspUrl,
             '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
             '-pix_fmt','yuv420p','-g','120','-an',
+            '-r', '25', // Force a constant frame rate to reduce stuttering
             '-b:v','1000k','-maxrate','1500k','-bufsize','2000k',
             '-profile:v','main','-level','4.1',
             '-strict', '-2', // Allow use of experimental codecs/features if needed
