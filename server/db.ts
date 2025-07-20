@@ -55,14 +55,16 @@ export async function addEvent(eventData: Omit<Event, 'id' | 'timestamp'>): Prom
   };
 
   await db.run(
-    'INSERT INTO events (id, timestamp, cameraId, type, label, payload, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO events (id, timestamp, cameraId, type, label, payload, status, recordingPath, thumbnailPath) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     newEvent.id,
     newEvent.timestamp,
     newEvent.cameraId,
     newEvent.type,
     newEvent.label,
     JSON.stringify(newEvent.payload || {}),
-    newEvent.status
+    newEvent.status,
+    newEvent.recordingPath || null,
+    newEvent.thumbnailPath || null
   );
   console.log(`[DB] Event added successfully: ${newEvent.id}`);
   return newEvent;

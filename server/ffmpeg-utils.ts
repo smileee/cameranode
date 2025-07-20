@@ -81,3 +81,14 @@ export async function createThumbnail(videoPath: string, thumbnailPath: string):
         });
     });
 } 
+
+export async function createRecordingFromEvent(
+  eventId: string,
+  cameraId: string,
+  eventTimestamp: number,
+  segmentBuffer: any[]
+): Promise<{ videoPath: string; thumbnailPath: string } | null> {
+  // Stub: recording creation disabled for now
+  console.warn('[createRecordingFromEvent] Stub called - not implemented');
+  return null;
+} 
