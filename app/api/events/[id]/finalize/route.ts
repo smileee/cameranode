@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getEventById, updateEvent } from '@/server/db';
 import { getCameraState } from '@/server/state';
-import { createRecordingFromSegments } from '@/server/ffmpeg-utils';
+import { createRecordingFromEvent } from '@/server/ffmpeg-utils';
 
 /**
  * Handles the finalization of a recording for a given event.
@@ -32,17 +32,18 @@ export async function POST(
       }
       
       const cameraState = getCameraState(event.cameraId);
-      const segmentsToSave = cameraState.hlsSegmentBuffer.map(s => s.filename);
+      const segmentBuffer = cameraState.hlsSegmentBuffer;
 
-      if (segmentsToSave.length === 0) {
+      if (segmentBuffer.length === 0) {
         console.warn(`[API/Finalize] No segments in buffer for camera ${event.cameraId}. Cannot create recording.`);
         return;
       }
 
-      const recordingPaths = await createRecordingFromSegments(
+      const recordingPaths = await createRecordingFromEvent(
         eventId,
         event.cameraId,
-        segmentsToSave
+        new Date(event.timestamp).getTime(),
+        segmentBuffer
       );
 
       if (recordingPaths) {

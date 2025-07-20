@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { HlsSegment } from './state';
 
 const resolveFfmpegPath = () => {
     try {
@@ -174,46 +175,65 @@ export function finalizeAndSaveRecording(
 } 
 
 /**
- * Creates a recording from a set of HLS segments.
- * This involves concatenating the segments into a single MP4 and generating a thumbnail.
- * @param eventId The ID of the event, used for naming the output files.
+ * Finds the most relevant video segment for a given event, copies it,
+ * generates a thumbnail, and returns the public-facing paths.
+ * @param eventId The ID of the event.
  * @param cameraId The ID of the camera.
- * @param segmentsToSave The list of segment filenames to include.
+ * @param eventTimestamp The timestamp of the event.
+ * @param segmentBuffer The buffer of HLS segments to search through.
  * @returns An object with the paths to the video and thumbnail, or null on failure.
  */
-export async function createRecordingFromSegments(
+export async function createRecordingFromEvent(
     eventId: string,
     cameraId: string,
-    segmentsToSave: string[]
+    eventTimestamp: number,
+    segmentBuffer: HlsSegment[]
 ): Promise<{ videoPath: string; thumbnailPath: string } | null> {
     
-    const uniqueSegments = [...new Set(segmentsToSave)];
-    if (uniqueSegments.length === 0) {
-        console.warn(`[CreateRecording] No segments to save for event ${eventId}.`);
+    if (segmentBuffer.length === 0) {
+        console.warn(`[CreateRecording] No segments in buffer for event ${eventId}.`);
         return null;
     }
+
+    // Find the segment that is closest to (but ideally just before) the event time.
+    let bestSegment: HlsSegment | null = null;
+    let smallestDiff = Infinity;
+
+    for (const segment of segmentBuffer) {
+        const diff = eventTimestamp - segment.startTime;
+        if (diff >= 0 && diff < smallestDiff) {
+            smallestDiff = diff;
+            bestSegment = segment;
+        }
+    }
+
+    if (!bestSegment) {
+        console.warn(`[CreateRecording] Could not find a suitable segment for event ${eventId}. Using the latest one as a fallback.`);
+        bestSegment = segmentBuffer[segmentBuffer.length - 1];
+    }
+    
+    console.log(`[CreateRecording] Best segment for event ${eventId} is ${bestSegment.filename}`);
 
     const liveDir = path.join(process.cwd(), 'recordings', cameraId, 'live');
     const outputDir = path.join(process.cwd(), 'recordings', cameraId);
     await fs.mkdir(outputDir, { recursive: true });
     
+    const sourceSegmentPath = path.join(liveDir, bestSegment.filename);
     const videoFileName = `rec-${eventId}.mp4`;
     const videoPath = path.join(outputDir, videoFileName);
 
     try {
-        const success = await concatenateSegments(uniqueSegments, liveDir, videoPath);
+        // We copy the .ts segment and rename it to .mp4. FFMPEG can handle this.
+        await fs.copyFile(sourceSegmentPath, videoPath);
 
-        if (success) {
-            console.log(`[CreateRecording] Successfully created video for event ${eventId}: ${videoPath}`);
-            const thumbnailPath = await generateThumbnail(videoPath);
-            if (thumbnailPath) {
-                return {
-                    videoPath: `/api/media/${cameraId}/${videoFileName}`,
-                    thumbnailPath: `/api/media/${cameraId}/${path.basename(thumbnailPath)}`,
-                };
-            }
-        } else {
-            console.error(`[CreateRecording] Failed to create video for event ${eventId}.`);
+        console.log(`[CreateRecording] Successfully created video for event ${eventId}: ${videoPath}`);
+        const thumbnailPath = await generateThumbnail(videoPath);
+        
+        if (thumbnailPath) {
+            return {
+                videoPath: `/api/media/${cameraId}/${videoFileName}`,
+                thumbnailPath: `/api/media/${cameraId}/${path.basename(thumbnailPath)}`,
+            };
         }
     } catch (error) {
         console.error(`[CreateRecording] An unexpected error occurred during creation for event ${eventId}:`, error);
