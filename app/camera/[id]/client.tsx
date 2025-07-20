@@ -29,6 +29,7 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
   const [isLive, setIsLive] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [playlistStartTime, setPlaylistStartTime] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -63,19 +64,37 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
     setIsLive(true);
   };
 
-  const handleGoDvr = () => {
-    setCurrentStreamUrl(dvrStreamUrl);
-    setIsLive(false);
+  const handleGoDvr = async () => {
+    try {
+      const response = await fetch(dvrStreamUrl);
+      if (!response.ok) {
+        console.error('Failed to fetch DVR playlist');
+        return;
+      }
+      const startTimeHeader = response.headers.get('X-Playlist-Start-Time');
+      if (startTimeHeader) {
+        setPlaylistStartTime(parseInt(startTimeHeader, 10));
+      }
+      setCurrentStreamUrl(dvrStreamUrl);
+      setIsLive(false);
+    } catch (error) {
+      console.error('Error fetching DVR playlist:', error);
+    }
   };
 
   const handleTimelineEventClick = (timestamp: string) => {
-    // This is a simplified example.
-    // A more robust solution would calculate the exact second to seek to
-    // based on the event's timestamp relative to the start of the DVR buffer.
-    if (videoRef.current) {
-      // For now, just switch to DVR mode. Seeking requires more info.
-      handleGoDvr();
-      console.log(`Timeline event clicked: ${timestamp}. Seeking logic to be implemented.`);
+    if (videoRef.current && playlistStartTime) {
+      const eventTime = new Date(timestamp).getTime();
+      const seekTime = (eventTime - playlistStartTime) / 1000;
+
+      if (seekTime >= 0) {
+        videoRef.current.currentTime = seekTime;
+        videoRef.current.play();
+      } else {
+        console.warn('Cannot seek to a time before the recording started.');
+      }
+    } else {
+      console.log('DVR not ready for seeking.');
     }
   };
 
