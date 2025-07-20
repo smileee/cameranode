@@ -145,11 +145,15 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-hls_time', SEG_DUR,
         '-hls_list_size', PLAYLIST_SZ,
         '-hls_flags', HLS_FLAGS,
-        '-hls_segment_filename', path.join(liveDir,'segment%06d.ts'),
-        '-hls_segment_type','mpegts',
-        '-hls_allow_cache','0', // Disable caching for live streams
-        '-hls_base_url','', // No base URL
-        path.join(liveDir,'live.m3u8'),
+        '-hls_segment_filename',
+        `${liveDir}/segment%06d.ts`,
+        '-hls_segment_type',
+        'mpegts',
+        '-hls_allow_cache',
+        '0',
+        '-hls_base_url',
+        'live/',
+        `${liveDir}/live.m3u8`
     ];
 
     // Both cameras will now be re-encoded to ensure a clean, stable stream and fix timestamp issues.
