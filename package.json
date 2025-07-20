@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only --project tsconfig.server.json server.ts",
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child --watch server,app/api,components,types --ignore-watch node_modules -r tsconfig-paths/register server.ts",
     "build:server": "tsc --project tsconfig.server.json",
     "build": "npm run build:server && next build",
     "start": "NODE_ENV=production node -r tsconfig-paths/register dist/server.js",
     "lint": "next lint",
+    "clear-database": "rm -f db.sqlite db.sqlite-journal",
     "pm2:start": "pm2 start ecosystem.config.js --env production",
     "pm2:stop": "pm2 stop ecosystem.config.js",
     "pm2:restart": "pm2 restart ecosystem.config.js"
