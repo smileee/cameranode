@@ -132,8 +132,6 @@ async function startHlsStreamForCamera(camera: Camera) {
     const PLAYLIST_SZ = '25'; // 25×4s = 100s de buffer (increased from 12×2s = 24s)
     const HLS_FLAGS = 'program_date_time+delete_segments+append_list';
 
-    const useCopy = camera.id === '2';
-
     const baseArgs = (
         codecArgs: string[]
     ) => [
@@ -145,6 +143,7 @@ async function startHlsStreamForCamera(camera: Camera) {
         // '-reconnect_at_eof','1',
         // '-reconnect_streamed','1',
         // '-reconnect_delay_max','5',
+        '-fflags', '+genpts+discardcorrupt', // Regenerate timestamps and discard corrupted frames
         ...codecArgs,
         '-f','hls',
         '-hls_time', SEG_DUR,
@@ -157,15 +156,15 @@ async function startHlsStreamForCamera(camera: Camera) {
         path.join(liveDir,'live.m3u8'),
     ];
 
-    const ffmpegArgs = useCopy
-        ? baseArgs(['-i', camera.rtspUrl, '-c:v','copy','-an'])
-        : baseArgs([
-            '-i', camera.rtspUrl,
-            '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
-            '-pix_fmt','yuv420p','-g','120','-an', // Increased GOP size from 60 to 120
-            '-b:v','2000k','-maxrate','2500k','-bufsize','4000k', // Better bitrate control
-            '-profile:v','baseline','-level','3.0', // More compatible profile
-        ]);
+    // Both cameras will now be re-encoded to ensure a clean, stable stream and fix timestamp issues.
+    // The 'useCopy' logic has been removed.
+    const ffmpegArgs = baseArgs([
+        '-i', camera.rtspUrl,
+        '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
+        '-pix_fmt','yuv420p','-g','120','-an', // Increased GOP size from 60 to 120
+        '-b:v','2000k','-maxrate','2500k','-bufsize','4000k', // Better bitrate control
+        '-profile:v','baseline','-level','3.0', // More compatible profile
+    ]);
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
