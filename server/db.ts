@@ -20,12 +20,12 @@ async function initializeDb() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
-      timestamp TEXT NOT NULL,
       cameraId TEXT NOT NULL,
-      type TEXT NOT NULL,
+      timestamp DATETIME NOT NULL,
       label TEXT NOT NULL,
-      payload TEXT,
-      status TEXT NOT NULL
+      status TEXT NOT NULL,
+      recordingPath TEXT,
+      thumbnailPath TEXT
     );
 
     CREATE TABLE IF NOT EXISTS camera_settings (
