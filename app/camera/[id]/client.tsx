@@ -16,6 +16,13 @@ interface DetectionEvent {
   thumbnailPath?: string;
 }
 
+interface RecordingFile {
+  filename: string;
+  size: number;
+  createdAt: string;
+  url: string;
+}
+
 interface ClientPageProps {
   camera: Camera;
   events: DetectionEvent[];
@@ -23,6 +30,9 @@ interface ClientPageProps {
 
 export default function ClientPage({ camera, events: initialEvents }: ClientPageProps) {
   const [events, setEvents] = useState<DetectionEvent[]>(initialEvents);
+  const [recordings, setRecordings] = useState<RecordingFile[]>([]);
+  const [activeTab, setActiveTab] = useState<'live' | 'library'>('live');
+
   const liveStreamUrl = `/api/media/live/${camera.id}/live.m3u8`;
   const dvrStreamUrl = `/api/camera/${camera.id}/dvr/playlist.m3u8`;
 
@@ -143,6 +153,34 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
     }
   }, [streamError, isLive]);
 
+  useEffect(() => {
+    const fetchRecordings = async () => {
+      if (activeTab === 'library') {
+        try {
+          const response = await fetch(`/api/camera/${camera.id}/recordings`);
+          if (response.ok) {
+            const data: RecordingFile[] = await response.json();
+            setRecordings(data);
+          } else {
+            console.error('Failed to fetch recordings');
+            setRecordings([]);
+          }
+        } catch (error) {
+          console.error('Error fetching recordings:', error);
+          setRecordings([]);
+        }
+      }
+    };
+
+    fetchRecordings();
+  }, [activeTab, camera.id]);
+
+  const handlePlayRecording = (url: string) => {
+    setCurrentStreamUrl(url);
+    setIsLive(false); // Switch to "DVR" mode to show controls
+    setStreamError(null);
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-screen bg-background text-foreground">
       {/* Main Content */}
@@ -165,13 +203,12 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
               {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             <div className="flex items-center gap-2 p-1 bg-muted rounded-lg">
-              <button onClick={handleGoLive} className={`px-3 py-1 text-sm rounded-md transition-colors ${isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
+              <button onClick={() => setActiveTab('live')} className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === 'live' ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
                 Live
               </button>
-              {/* DVR disabled até implementação completa */}
-              {/* <button onClick={handleGoDvr} className={`px-3 py-1 text-sm rounded-md transition-colors ${!isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
-                DVR
-              </button> */}
+              <button onClick={() => setActiveTab('library')} className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === 'library' ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
+                Library
+              </button>
             </div>
           </div>
         </header>
@@ -208,13 +245,40 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
               <LiveStream
                   src={currentStreamUrl}
                   videoRef={videoRef}
-                  controls={!isLive}
+                  controls={activeTab === 'library' || !isLive}
                   onError={(error) => setStreamError(error)}
                 />
             </div>
           </div>
 
-          {!isLive && (
+          {activeTab === 'library' && (
+            <div className="w-full p-4 bg-muted/50 border border-border rounded-lg mt-4">
+              <h3 className="text-lg font-semibold mb-2">Recorded Files</h3>
+              <div className="h-40 overflow-y-auto">
+                {recordings.length > 0 ? (
+                  <ul className="space-y-2">
+                    {recordings.map((rec) => (
+                      <li key={rec.filename} onClick={() => handlePlayRecording(rec.url)} className="p-2 rounded-md hover:bg-accent cursor-pointer flex justify-between items-center">
+                        <div>
+                          <p className="font-medium">{rec.filename}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(rec.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {(rec.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground">No recordings found.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isLive && activeTab !== 'library' && (
             <div className="w-full p-4 bg-muted/50 border border-border rounded-lg mt-4">
               <h3 className="text-lg font-semibold mb-2">Recorded Events</h3>
               <div className="h-40 overflow-y-auto">

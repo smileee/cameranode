@@ -3,6 +3,7 @@
 import path from 'path';
 import { spawn } from 'child_process';
 import { Camera } from '../cameras.config';
+import fs from 'fs';
 
 // Constants for HLS streaming
 const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each segment in seconds
@@ -158,4 +159,55 @@ export async function createRecordingFromEvent(
   // Stub: recording creation disabled for now
   console.warn('[createRecordingFromEvent] Stub called - not implemented');
     return null;
+} 
+
+/**
+ * Checks the total size of recordings for a camera and deletes the oldest ones
+ * if the storage limit is exceeded.
+ * @param {Camera} camera - The camera object, including the storageLimitGB.
+ */
+export async function cleanupRecordings(camera: Camera): Promise<void> {
+    if (camera.storageLimitGB === undefined || camera.storageLimitGB <= 0) {
+        console.log(`[Cleanup ${camera.id}] No storage limit set, skipping cleanup.`);
+        return;
+    }
+
+    const recordingsDir = path.join(process.cwd(), 'recordings', camera.id);
+    const limitBytes = camera.storageLimitGB * 1024 * 1024 * 1024;
+
+    try {
+        if (!fs.existsSync(recordingsDir)) {
+            return;
+        }
+        
+        const files = fs.readdirSync(recordingsDir)
+            .filter(file => file.endsWith('.mp4'))
+            .map(file => {
+                const filePath = path.join(recordingsDir, file);
+                const stats = fs.statSync(filePath);
+                return { path: filePath, size: stats.size, mtime: stats.mtime };
+            })
+            // Sort by modification time, oldest first
+            .sort((a, b) => a.mtime.getTime() - b.mtime.getTime());
+
+        let totalSize = files.reduce((acc, file) => acc + file.size, 0);
+
+        if (totalSize > limitBytes) {
+            console.log(`[Cleanup ${camera.id}] Storage limit exceeded. Total: ${(totalSize / (1024*1024*1024)).toFixed(2)}GB, Limit: ${camera.storageLimitGB}GB. Cleaning up...`);
+            
+            for (const file of files) {
+                if (totalSize <= limitBytes) {
+                    break;
+                }
+                console.log(`[Cleanup ${camera.id}] Deleting old recording: ${path.basename(file.path)}`);
+                fs.unlinkSync(file.path);
+                totalSize -= file.size;
+            }
+            
+            console.log(`[Cleanup ${camera.id}] Cleanup complete. New total size: ${(totalSize / (1024*1024*1024)).toFixed(2)}GB`);
+        }
+        
+    } catch (error) {
+        console.error(`[Cleanup ${camera.id}] Error during cleanup:`, error);
+    }
 } 

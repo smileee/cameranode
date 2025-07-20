@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addEvent, getCameraSettings } from '@/server/db'; // Import getCameraSettings
-import { SPEAKERS } from '@/cameras.config';
+import { CAMERAS, SPEAKERS } from '@/cameras.config';
+import { cleanupRecordings } from '@/server/ffmpeg-utils';
 
 /**
  * After an event is saved, trigger the finalization of its recording.
@@ -147,6 +148,12 @@ export async function POST(req: NextRequest) {
 
         // After the event is successfully saved, trigger the finalization process.
         triggerFinalization(newEvent.id, req);
+
+        // Also trigger a cleanup of old recordings for this camera
+        const camera = CAMERAS.find(c => c.id === cameraId);
+        if (camera) {
+            cleanupRecordings(camera);
+        }
 
         console.log(`[Webhook] Event saved for camera ${cameraId}: ${label} (id: ${newEvent.id})`);
         return NextResponse.json({ ok: true });

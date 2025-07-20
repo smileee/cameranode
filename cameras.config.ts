@@ -4,6 +4,7 @@ export interface Camera {
   rtspUrl: string;
   enabled?: boolean;
   mock?: boolean; // For development/testing
+  storageLimitGB?: number; // Max storage in GB for recordings
 }
 
 export interface Speaker {
@@ -38,14 +39,16 @@ export const CAMERAS: Camera[] = [
     name: 'Cam 1 (YARD CAM)',
     rtspUrl: forceMockMode ? MOCK_RTSP_URL : 'rtsp://192.168.9.232:554',
     enabled: true,
-    mock: forceMockMode
+    mock: forceMockMode,
+    storageLimitGB: 10
   },
   {
     id: '2',
     name: 'Cam 2 (SIDE CAM)',
     rtspUrl: forceMockMode ? MOCK_RTSP_URL : 'rtsp://192.168.9.161:554',
     enabled: true,
-    mock: forceMockMode
+    mock: forceMockMode,
+    storageLimitGB: 10
   }
 ]; 
 
