@@ -2,7 +2,7 @@
 
 import path from 'path';
 import { spawn } from 'child_process';
-import { Camera } from '@/cameras.config';
+import { Camera } from '../cameras.config';
 
 // Constants for HLS streaming
 const HLS_SEGMENT_DURATION_SECONDS = 2; // Duration of each segment in seconds
@@ -78,6 +78,73 @@ export async function createThumbnail(videoPath: string, thumbnailPath: string):
         ffmpegProcess.on('error', (err) => {
             console.error('[Thumbnail] Failed to start ffmpeg process:', err);
             resolve(null);
+        });
+    });
+}
+
+/**
+ * Concatenates HLS segments into a single MP4 file.
+ * @param segmentPaths - An array of paths to the HLS segment files.
+ * @param outputPath - The path to save the final MP4 file.
+ */
+export async function concatenateSegments(segmentPaths: string[], outputPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', [
+            '-i', `concat:${segmentPaths.join('|')}`,
+            '-c', 'copy',
+            '-movflags', 'faststart',
+            outputPath
+        ]);
+
+        ffmpeg.stderr.on('data', (data) => {
+            console.error(`[FFMPEG CONCAT]: ${data}`);
+        });
+
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                console.log('[FFMPEG CONCAT] Concatenation successful.');
+                resolve();
+            } else {
+                reject(new Error(`[FFMPEG CONCAT] Exited with code ${code}`));
+            }
+        });
+
+        ffmpeg.on('error', (err) => {
+            reject(new Error(`[FFMPEG CONCAT] Failed to start process: ${err.message}`));
+        });
+    });
+}
+
+/**
+ * Generates a thumbnail from a video file.
+ * @param videoPath - Path to the video file.
+ * @param outputPath - Path to save the thumbnail.
+ */
+export async function generateThumbnail(videoPath: string, outputPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', [
+            '-i', videoPath,
+            '-ss', '00:00:01', // Take thumbnail at 1 second
+            '-vframes', '1',
+            '-vf', 'scale=320:-1', // Resize to 320px width, auto height
+            outputPath
+        ]);
+
+        ffmpeg.stderr.on('data', (data) => {
+            console.error(`[FFMPEG THUMBNAIL]: ${data}`);
+        });
+
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                console.log('[FFMPEG THUMBNAIL] Thumbnail generated successfully.');
+                resolve();
+            } else {
+                reject(new Error(`[FFMPEG THUMBNAIL] Exited with code ${code}`));
+            }
+        });
+
+        ffmpeg.on('error', (err) => {
+            reject(new Error(`[FFMPEG THUMBNAIL] Failed to start process: ${err.message}`));
         });
     });
 }

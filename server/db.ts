@@ -133,7 +133,31 @@ export async function updateEvent(id: string, updates: Partial<Omit<Event, 'id'>
   return getEventById(id);
 }
 
-
-// ... (you can add deleteEventsById if needed, following the same pattern)
+/**
+ * Deletes events by their IDs.
+ * @param eventIds - An array of event IDs to delete.
+ */
+export async function deleteEventsById(eventIds: string[]): Promise<void> {
+    if (eventIds.length === 0) {
+        return;
+    }
+    const placeholders = eventIds.map(() => '?').join(',');
+    const query = `DELETE FROM events WHERE id IN (${placeholders})`;
+    
+    return new Promise(async (resolve, reject) => {
+        try {
+            const db = await initializeDb(); // Use initializeDb here
+            db.run(query, eventIds, function(err) {
+                if (err) {
+                    return reject(new Error(`[DB] Failed to delete events: ${err.message}`));
+                }
+                console.log(`[DB] Deleted ${this.changes} events.`);
+                resolve();
+            });
+        } catch (err: any) {
+            reject(new Error(`[DB] Failed to open database for deletion: ${err.message}`));
+        }
+    });
+}
 
 export { initializeDb }; 
