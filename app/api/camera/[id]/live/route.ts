@@ -3,7 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const HLS_OUTPUT_DIR = 'recordings';
-const HLS_SEGMENT_DURATION_SECONDS = 6; // This MUST match the streamer config
+const HLS_SEGMENT_DURATION_SECONDS = 6;
+const MAX_PLAYLIST_SEGMENTS = 5; // Keep the playlist from growing indefinitely
+
+let mediaSequence = 0;
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
     const cameraId = params.id;
@@ -11,33 +14,40 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     try {
         const files = await fs.readdir(liveDir);
-        const segments = files
+        let segments = files
             .filter(file => file.endsWith('.ts'))
-            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            .sort((a, b) => {
+                const numA = parseInt(a.replace('live', '').replace('.ts', ''));
+                const numB = parseInt(b.replace('live', '').replace('.ts', ''));
+                return numA - numB;
+            });
 
         if (segments.length === 0) {
             return new Response('No segments available for this camera.', { status: 404 });
         }
-
-        // Get the creation time of the first segment
-        const firstSegmentPath = path.join(liveDir, segments[0]);
-        const stats = await fs.stat(firstSegmentPath);
-        const playlistStartTime = stats.mtime.getTime();
+        
+        // If the number of segments exceeds the max, we slide the window
+        if (segments.length > MAX_PLAYLIST_SEGMENTS) {
+            const firstSegmentIndex = segments.length - MAX_PLAYLIST_SEGMENTS;
+            const firstSegmentName = segments[firstSegmentIndex];
+            mediaSequence = parseInt(firstSegmentName.replace('live', '').replace('.ts', ''));
+            segments = segments.slice(firstSegmentIndex);
+        } else {
+            mediaSequence = 0;
+        }
 
         const playlistParts = [
             '#EXTM3U',
             '#EXT-X-VERSION:3',
-            '#EXT-X-TARGETDURATION:' + HLS_SEGMENT_DURATION_SECONDS,
-            '#EXT-X-PLAYLIST-TYPE:VOD', // Explicitly VOD for DVR
+            '#EXT-X-TARGETDURATION:' + (HLS_SEGMENT_DURATION_SECONDS + 2), // A bit of buffer
+            `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
+            '#EXT-X-PLAYLIST-TYPE:EVENT', // Changed from VOD to EVENT for live
         ];
 
         for (const segment of segments) {
             playlistParts.push(`#EXTINF:${HLS_SEGMENT_DURATION_SECONDS.toFixed(4)},`);
-            // Correct the media path to point to the live segments for DVR playback
             playlistParts.push(`/api/media/${cameraId}/live/${segment}`);
         }
-
-        playlistParts.push('#EXT-X-ENDLIST'); // Add ENDLIST for VOD
 
         const playlist = playlistParts.join('\n');
 
@@ -46,14 +56,13 @@ export async function GET(request: Request, { params }: { params: { id: string }
             headers: {
                 'Content-Type': 'application/vnd.apple.mpegurl',
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'X-Playlist-Start-Time': String(playlistStartTime),
             },
         });
     } catch (error: any) {
         if (error.code === 'ENOENT') {
             return new Response(`No recordings directory found for camera ${cameraId}.`, { status: 404 });
         }
-        console.error(`[API DVR Playlist] Error generating playlist for camera ${cameraId}:`, error);
+        console.error(`[API Live Playlist] Error generating playlist for camera ${cameraId}:`, error);
         return new Response('Internal Server Error', { status: 500 });
     }
 } 
