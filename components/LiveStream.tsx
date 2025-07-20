@@ -39,85 +39,50 @@ export default function LiveStream({ src, controls = false, videoRef: parentRef,
 
     if (Hls.isSupported() && src.endsWith('m3u8')) {
       const hls = new Hls({
-        // Increase the buffer size to handle network fluctuations
-        maxBufferLength: 60, // seconds
-        maxMaxBufferLength: 120, // seconds
+        // Infinite retries on fatal errors
+        maxMaxBufferLength: 120, // Keep up to 2 minutes in buffer
         
-        // More aggressive retry logic for manifest and fragment loading
-        manifestLoadingMaxRetry: 5,
-        manifestLoadingRetryDelay: 1000,
-        fragLoadingMaxRetry: 6,
-        fragLoadingRetryDelay: 1000,
+        // Retry logic
+        manifestLoadingMaxRetry: 10,
+        manifestLoadingRetryDelay: 2000, // 2 seconds
+        manifestLoadingMaxRetryTimeout: 20000, // 20 seconds
+        
+        fragLoadingMaxRetry: 15,
+        fragLoadingRetryDelay: 2000, // 2 seconds
+        fragLoadingMaxRetryTimeout: 20000, // 20 seconds
 
-        // Start loading data from the live edge
-        liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 4,
+        // Level loading settings
+        levelLoadingMaxRetry: 10,
+        levelLoadingRetryDelay: 2000, // 2 seconds
+        levelLoadingMaxRetryTimeout: 20000, // 20 seconds
 
-        lowLatencyMode: true,
-        backBufferLength: 90, // New: keep more segments in memory
-        enableWorker: true, // New: use web workers for better performance
-        debug: false, // Set to true for debugging
-        // Error recovery settings
-        fragLoadingTimeOut: 20000, // 20 seconds timeout for fragment loading
-        manifestLoadingTimeOut: 20000, // 20 seconds timeout for manifest loading
-        levelLoadingTimeOut: 20000, // 20 seconds timeout for level loading
+        // General settings for stability
+        liveSyncDurationCount: 3, // Segments from edge to sync
+        liveMaxLatencyDurationCount: 5, // Segments from edge to seek
       });
 
-      hlsRef.current = hls;
-
-      // Error handling
+      // This will automatically recover from most media errors
+      // without us needing to do anything manually.
       hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error('[HLS Error]', data);
-        const errorMessage = `Stream error: ${data.type}`;
-        setError(errorMessage);
-        onError?.(errorMessage);
-        
-        // Auto-recovery for certain error types
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log('[HLS] Network error, attempting recovery...');
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('[HLS] Media error, attempting recovery...');
-              hls.recoverMediaError();
-              break;
-            default:
-              console.log('[HLS] Fatal error, destroying and recreating...');
-              hls.destroy();
-              setTimeout(() => {
-                setError(null);
-                setIsLoading(true);
-                initializeHls();
-              }, 2000);
-              break;
+          if (data.fatal) {
+              switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                      console.error('HLS.js: Fatal network error encountered, trying to recover...');
+                      hls?.startLoad();
+                      break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                      console.error('HLS.js: Fatal media error encountered, trying to recover...');
+                      hls?.recoverMediaError();
+                      break;
+                  default:
+                      // Cannot recover, destroy HLS instance
+                      console.error('HLS.js: Unrecoverable fatal error encountered, destroying instance.');
+                      hls?.destroy();
+                      break;
+              }
           }
-        }
       });
 
-      // Success events
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('[HLS] Manifest parsed successfully');
-        setError(null);
-        setIsLoading(false);
-        video.play().catch(error => {
-          console.log('[HLS Player] Autoplay was prevented:', error);
-        });
-      });
-
-      hls.on(Hls.Events.LEVEL_LOADED, () => {
-        console.log('[HLS] Level loaded');
-      });
-
-      hls.on(Hls.Events.FRAG_LOADED, () => {
-        // Reset error state when fragments load successfully
-        if (error) {
-          setError(null);
-        }
-      });
-
-      // Load the source
       hls.loadSource(src);
       hls.attachMedia(video);
     } else if (video.canPlayType('application/vnd.apple.mpegurl') && src.endsWith('m3u8')) {
