@@ -135,16 +135,26 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
 
         <div className="flex-grow p-4 relative">
           <div className="bg-muted aspect-video w-full rounded-lg overflow-hidden relative">
-            {isLive && (
-              <div className="absolute top-3 right-3 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs font-mono">
-                {currentTime.toLocaleTimeString()}
-              </div>
-            )}
-            <LiveStream
-              src={currentStreamUrl}
-              videoRef={videoRef}
-              controls={!isLive}
-            />
+            <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
+              <span
+                className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                  isLive ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                {isLive ? 'LIVE' : 'DVR'}
+              </span>
+            </div>
+            <div className="w-full h-full bg-black flex items-center justify-center">
+              {isLive ? (
+                <LiveStream src={`/api/camera/${camera.id}/live/playlist.m3u8`} videoRef={videoRef} />
+              ) : (
+                <LiveStream
+                  src={currentStreamUrl}
+                  videoRef={videoRef}
+                  controls={!isLive}
+                />
+              )}
+            </div>
           </div>
 
           {!isLive && (
