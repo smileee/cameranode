@@ -241,3 +241,31 @@ export async function createRecordingFromEvent(
 
     return null;
 } 
+
+/**
+ * 
+ * @returns {string[]} An array of arguments for ffmpeg.
+ */
+export function getFfmpegArgs(rtspUrl: string, hlsOutputPath: string) {
+    const args = [
+        // Input options - simplified for robustness
+        '-rtsp_transport', 'tcp',
+        '-i', rtspUrl,
+
+        // Video options
+        '-c:v', 'copy', // Copy the stream directly to avoid re-encoding errors
+
+        // Audio options
+        '-an', // No audio
+
+        // HLS options
+        '-f', 'hls',
+        '-hls_time', '2',
+        '-hls_list_size', '5',
+        '-hls_flags', 'delete_segments',
+        '-hls_segment_filename', path.join(hlsOutputPath, 'segment%06d.ts'),
+        path.join(hlsOutputPath, 'live.m3u8')
+    ];
+
+    return args;
+} 
