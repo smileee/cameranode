@@ -73,34 +73,32 @@ async function startHlsStreamForCamera(camera: Camera) {
     // REMOVED: This was causing instability with the camera's RTSP stream.
     // const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
 
-    // Use copy codec only for camera 2 (Pi). Others reencode for better tolerance.
+    const SEG_DUR = '2';
+    const PLAYLIST_SZ = '12'; // 12×2s = 24s de buffer
+    const HLS_FLAGS = 'program_date_time';
+
     const useCopy = camera.id === '2';
 
-    const ffmpegArgs = useCopy ? [
+    const baseArgs = (
+        codecArgs: string[]
+    ) => [
         '-rtsp_transport','tcp',
-        '-i', camera.rtspUrl,
-        '-c:v','copy',
-        '-an',
+        ...codecArgs,
         '-f','hls',
-        '-hls_time','2',
-        '-hls_list_size','5',
-        '-hls_flags','delete_segments',
-        '-hls_segment_filename', path.join(liveDir,'segment%06d.ts'),
-        path.join(liveDir,'live.m3u8'),
-    ] : [
-        '-rtsp_transport','tcp',
-        '-timeout','10000000',
-        '-i', camera.rtspUrl,
-        '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
-        '-pix_fmt','yuv420p','-g','60',
-        '-an',
-        '-f','hls',
-        '-hls_time','2',
-        '-hls_list_size','5',
-        '-hls_flags','delete_segments',
+        '-hls_time', SEG_DUR,
+        '-hls_list_size', PLAYLIST_SZ,
+        '-hls_flags', HLS_FLAGS,
         '-hls_segment_filename', path.join(liveDir,'segment%06d.ts'),
         path.join(liveDir,'live.m3u8'),
     ];
+
+    const ffmpegArgs = useCopy
+        ? baseArgs(['-i', camera.rtspUrl, '-c:v','copy','-an'])
+        : baseArgs([
+            '-timeout','10000000','-i', camera.rtspUrl,
+            '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
+            '-pix_fmt','yuv420p','-g','60','-an'
+        ]);
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
