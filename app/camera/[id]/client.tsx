@@ -127,9 +127,10 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
             <button onClick={handleGoLive} className={`px-3 py-1 text-sm rounded-md transition-colors ${isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
               Live
             </button>
-            <button onClick={handleGoDvr} className={`px-3 py-1 text-sm rounded-md transition-colors ${!isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
+            {/* DVR disabled até implementação completa */}
+            {/* <button onClick={handleGoDvr} className={`px-3 py-1 text-sm rounded-md transition-colors ${!isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
               DVR
-            </button>
+            </button> */}
           </div>
         </header>
 

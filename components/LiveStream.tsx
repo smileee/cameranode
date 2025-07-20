@@ -27,7 +27,11 @@ export default function LiveStream({ src, controls = false, videoRef: parentRef 
     let hls: Hls | null = null;
 
     if (Hls.isSupported() && src.endsWith('m3u8')) {
-      hls = new Hls();
+      hls = new Hls({
+        maxBufferLength: 30,
+        liveSyncDuration: 4,
+        lowLatencyMode: true,
+      });
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
