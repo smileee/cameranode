@@ -146,8 +146,8 @@ export async function deleteEventsById(eventIds: string[]): Promise<void> {
     
     return new Promise(async (resolve, reject) => {
         try {
-            const db = await initializeDb(); // Use initializeDb here
-            db.run(query, eventIds, function(err) {
+            const db = await initializeDb();
+            db.run(query, eventIds, function(this: import('sqlite3').RunResult, err: Error | null) {
                 if (err) {
                     return reject(new Error(`[DB] Failed to delete events: ${err.message}`));
                 }

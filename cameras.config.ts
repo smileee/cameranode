@@ -35,14 +35,14 @@ console.log('[Camera Config] Environment detection:', {
 export const CAMERAS: Camera[] = [
   {
     id: '1',
-    name: 'Cam 1 (BOX CAM)',
+    name: 'Cam 1 (YARD CAM)',
     rtspUrl: forceMockMode ? MOCK_RTSP_URL : 'rtsp://192.168.9.232:554',
     enabled: true,
     mock: forceMockMode
   },
   {
     id: '2',
-    name: 'Cam 2 (PI CAM)',
+    name: 'Cam 2 (SIDE CAM)',
     rtspUrl: forceMockMode ? MOCK_RTSP_URL : 'rtsp://192.168.9.161:554',
     enabled: true,
     mock: forceMockMode
