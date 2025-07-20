@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { CAMERAS } from '../cameras.config';
 import CameraCard from "@/components/CameraCard";
-import { IconSettings } from '@tabler/icons-react';
+import { IconSettings, IconBug } from '@tabler/icons-react';
 
 export default function HomePage() {
   return (
@@ -14,10 +14,16 @@ export default function HomePage() {
               <h1 className="text-3xl font-bold tracking-tight">Cameras</h1>
               <p className="text-muted-foreground mt-1">Select a camera to view the live stream or library.</p>
             </div>
-            <Link href="/settings" className="btn btn-ghost">
-                <IconSettings size={18} />
-                <span className="ml-2">Settings</span>
-            </Link>
+            <div className="flex gap-2">
+              <Link href="/debug" className="btn btn-ghost">
+                  <IconBug size={18} />
+                  <span className="ml-2">Debug</span>
+              </Link>
+              <Link href="/settings" className="btn btn-ghost">
+                  <IconSettings size={18} />
+                  <span className="ml-2">Settings</span>
+              </Link>
+            </div>
         </header>
         <main>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

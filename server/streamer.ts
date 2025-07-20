@@ -6,14 +6,14 @@ import { Camera, CAMERAS } from '../cameras.config';
 import { setHlsStreamerProcess, addHlsSegment, getCameraState, cleanupAllProcesses } from './state';
 
 const HLS_OUTPUT_DIR = 'recordings';
-const HLS_SEGMENT_DURATION_SECONDS = 6; // Duration of each video segment in seconds.
+const HLS_SEGMENT_DURATION_SECONDS = 4; // Increased from 2 to 4 seconds for better stability
 
 // Keep a large playlist so ffmpeg doesn't delete segments too early. 
 // We need to adjust this based on the new segment duration.
-// 1 hour = 3600 seconds. 3600s / 6s/segment = 600 segments. We'll use 800 to be safe.
-const HLS_LIST_SIZE = 800;
+// 1 hour = 3600 seconds. 3600s / 4s/segment = 900 segments. We'll use 1000 to be safe.
+const HLS_LIST_SIZE = 1000;
 const SEGMENT_BUFFER_RETENTION_MINUTES = 65; // Keep a little over an hour of segments on disk.
-const PRE_ROLL_BUFFER_SIZE = 10; // Number of segments to keep for pre-roll (10 segments * 6s = 60s buffer).
+const PRE_ROLL_BUFFER_SIZE = 15; // Number of segments to keep for pre-roll (15 segments * 4s = 60s buffer).
 
 /**
  * Periodically cleans up old HLS segment files for a given camera.
@@ -43,6 +43,7 @@ async function cleanupOldSegments(cameraId: string) {
         }
     }
 }
+
 /**
  * Starts a persistent ffmpeg process for a single camera to generate an HLS stream.
  * @param camera - The camera configuration object.
@@ -68,14 +69,9 @@ async function startHlsStreamForCamera(camera: Camera) {
         // We can still proceed, ffmpeg might just overwrite files.
     }
 
-    // The text to overlay on the video. Displays date and time.
-    // We need to escape colons for the drawtext filter.
-    // REMOVED: This was causing instability with the camera's RTSP stream.
-    // const timestampText = '%{localtime\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}';
-
-    const SEG_DUR = '2';
-    const PLAYLIST_SZ = '12'; // 12×2s = 24s de buffer
-    const HLS_FLAGS = 'program_date_time';
+    const SEG_DUR = '4'; // Increased from 2 to 4 seconds
+    const PLAYLIST_SZ = '25'; // 25×4s = 100s de buffer (increased from 12×2s = 24s)
+    const HLS_FLAGS = 'program_date_time+delete_segments+append_list';
 
     const useCopy = camera.id === '2';
 
@@ -83,26 +79,43 @@ async function startHlsStreamForCamera(camera: Camera) {
         codecArgs: string[]
     ) => [
         '-rtsp_transport','tcp',
+        '-stimeout','10000000', // 10 second timeout for RTSP connection
+        '-reconnect','1', // Enable reconnection
+        '-reconnect_at_eof','1', // Reconnect at end of file
+        '-reconnect_streamed','1', // Reconnect for streamed content
+        '-reconnect_delay_max','5', // Max 5 second delay between reconnection attempts
         ...codecArgs,
         '-f','hls',
         '-hls_time', SEG_DUR,
         '-hls_list_size', PLAYLIST_SZ,
         '-hls_flags', HLS_FLAGS,
         '-hls_segment_filename', path.join(liveDir,'segment%06d.ts'),
+        '-hls_segment_type','mpegts',
+        '-hls_allow_cache','0', // Disable caching for live streams
+        '-hls_base_url','', // No base URL
         path.join(liveDir,'live.m3u8'),
     ];
 
     const ffmpegArgs = useCopy
         ? baseArgs(['-i', camera.rtspUrl, '-c:v','copy','-an'])
         : baseArgs([
-            '-timeout','10000000','-i', camera.rtspUrl,
+            '-i', camera.rtspUrl,
             '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
-            '-pix_fmt','yuv420p','-g','60','-an'
+            '-pix_fmt','yuv420p','-g','120','-an', // Increased GOP size from 60 to 120
+            '-b:v','2000k','-maxrate','2500k','-bufsize','4000k', // Better bitrate control
+            '-profile:v','baseline','-level','3.0', // More compatible profile
         ]);
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
-    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+    const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
+        // Add environment variables for better stability
+        env: {
+            ...process.env,
+            'FFREPORT': `file=ffmpeg-${cameraId}.log:level=32`, // Enable detailed logging
+        }
+    });
+    
     setHlsStreamerProcess(cameraId, ffmpegProcess);
     
     // Use the readline interface for robust, line-by-line processing of the stream.
@@ -112,10 +125,29 @@ async function startHlsStreamForCamera(camera: Camera) {
         crlfDelay: Infinity
     });
 
+    let lastSegmentTime = Date.now();
+    let consecutiveErrors = 0;
+
     rl.on('line', (line) => {
         // Log the ffmpeg output here to ensure it's not consumed by a separate listener.
         // With loglevel at 'error', we should only see critical failure messages.
         console.log(`[FFMPEG_STDERR ${cameraId}]: ${line}`);
+
+        // Check for connection errors
+        if (line.includes('Connection refused') || line.includes('Connection timed out') || line.includes('Network is unreachable')) {
+            consecutiveErrors++;
+            console.error(`[FFMPEG ${cameraId}] Connection error (${consecutiveErrors}): ${line}`);
+            
+            // If we have too many consecutive errors, restart the process
+            if (consecutiveErrors > 5) {
+                console.error(`[FFMPEG ${cameraId}] Too many consecutive errors, restarting process...`);
+                ffmpegProcess.kill('SIGTERM');
+                return;
+            }
+        } else {
+            // Reset error counter on successful output
+            consecutiveErrors = 0;
+        }
 
         // Use a simpler regex to be less strict about the line format.
         const match = line.match(/Opening '([^']+\.ts)' for writing/);
@@ -129,11 +161,22 @@ async function startHlsStreamForCamera(camera: Camera) {
                 startTime: Date.now(),
             };
             addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
+            lastSegmentTime = Date.now();
         } else {
             // Log if a line doesn't match, to ensure we're not missing anything.
             // console.log(`[Streamer ${cameraId}] No match: ${line}`);
         }
     });
+
+    // Monitor for segment generation timeout
+    const segmentMonitor = setInterval(() => {
+        const timeSinceLastSegment = Date.now() - lastSegmentTime;
+        if (timeSinceLastSegment > 30000) { // 30 seconds without new segments
+            console.warn(`[FFMPEG ${cameraId}] No new segments for ${timeSinceLastSegment}ms, restarting...`);
+            ffmpegProcess.kill('SIGTERM');
+            clearInterval(segmentMonitor);
+        }
+    }, 10000); // Check every 10 seconds
 
     // Start a periodic cleanup task for this camera's segments.
     // Runs every 5 minutes.
@@ -141,10 +184,12 @@ async function startHlsStreamForCamera(camera: Camera) {
 
     ffmpegProcess.on('error', (err) => {
         console.error(`[FFMPEG_ERROR ${cameraId}] Process error:`, err);
+        consecutiveErrors++;
     });
 
     ffmpegProcess.on('close', (code, signal) => {
         console.log(`[FFMPEG_CLOSE ${cameraId}] Process exited with code ${code} and signal ${signal}.`);
+        clearInterval(segmentMonitor);
         
         const state = getCameraState(cameraId);
         // Only restart if the process was not intentionally killed.
