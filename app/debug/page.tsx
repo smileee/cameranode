@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { IconArrowLeft, IconRefresh } from '@tabler/icons-react';
+import { IconArrowLeft, IconRefresh, IconDeviceDesktop, IconCamera } from '@tabler/icons-react';
 
 interface StreamHealth {
   cameraId: string;
@@ -10,6 +10,8 @@ interface StreamHealth {
   segmentCount: number;
   lastSegmentTime: number | null;
   isHealthy: boolean;
+  isMock?: boolean;
+  enabled?: boolean;
 }
 
 interface HealthResponse {
@@ -59,6 +61,19 @@ export default function DebugPage() {
     return `${date.toLocaleTimeString()} (${diffSeconds}s ago)`;
   };
 
+  const getStreamTypeIcon = (stream: StreamHealth) => {
+    if (stream.isMock) {
+      return <IconDeviceDesktop size={16} className="text-blue-500" />;
+    }
+    return <IconCamera size={16} className="text-green-500" />;
+  };
+
+  const getStreamTypeLabel = (stream: StreamHealth) => {
+    if (stream.enabled === false) return 'Disabled';
+    if (stream.isMock) return 'Development Mock';
+    return 'Live Camera';
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-4xl mx-auto">
@@ -69,6 +84,9 @@ export default function DebugPage() {
               Back to Cameras
             </Link>
             <h1 className="text-2xl font-bold">Stream Health Monitor</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Development mode: Mock streams are being used for testing
+            </p>
           </div>
           <button
             onClick={fetchHealth}
@@ -119,20 +137,32 @@ export default function DebugPage() {
                   <div
                     key={stream.cameraId}
                     className={`p-4 rounded-lg border ${
-                      stream.isHealthy
+                      stream.enabled === false
+                        ? 'bg-gray-50 border-gray-200'
+                        : stream.isHealthy
                         ? 'bg-green-50 border-green-200'
                         : 'bg-red-50 border-red-200'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">Camera {stream.cameraId}</h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        stream.isHealthy
-                          ? 'bg-green-200 text-green-800'
-                          : 'bg-red-200 text-red-800'
-                      }`}>
-                        {stream.isHealthy ? 'Healthy' : 'Unhealthy'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {getStreamTypeIcon(stream)}
+                        <h3 className="font-semibold">Camera {stream.cameraId}</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {getStreamTypeLabel(stream)}
+                        </span>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          stream.enabled === false
+                            ? 'bg-gray-200 text-gray-800'
+                            : stream.isHealthy
+                            ? 'bg-green-200 text-green-800'
+                            : 'bg-red-200 text-red-800'
+                        }`}>
+                          {stream.enabled === false ? 'Disabled' : stream.isHealthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
@@ -145,8 +175,38 @@ export default function DebugPage() {
                         <span className="font-medium">Last Segment:</span> {formatTime(stream.lastSegmentTime)}
                       </div>
                     </div>
+                    
+                    {stream.isMock && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        <strong>Development Mode:</strong> This camera is using a mock stream because the real RTSP camera is not accessible from this network.
+                      </div>
+                    )}
+                    
+                    {stream.enabled === false && (
+                      <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+                        <strong>Disabled:</strong> This camera has been disabled in the configuration.
+                      </div>
+                    )}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Development Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-800 mb-2">Development Information</h3>
+              <div className="text-sm text-blue-700">
+                <p className="mb-2">
+                  You're running in development mode on a Mac. The system has automatically detected that the real RTSP cameras are not accessible and has switched to mock streams for testing.
+                </p>
+                <p>
+                  <strong>Next steps:</strong>
+                </p>
+                <ul className="list-disc list-inside ml-4 space-y-1">
+                  <li>Deploy this code to your Raspberry Pi server to access real cameras</li>
+                  <li>Ensure your cameras are accessible on the network (192.168.9.232 and 192.168.9.161)</li>
+                  <li>Mock streams allow you to test the UI and basic functionality</li>
+                </ul>
               </div>
             </div>
           </div>

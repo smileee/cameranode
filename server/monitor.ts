@@ -10,6 +10,8 @@ interface StreamHealth {
   segmentCount: number;
   lastSegmentTime: number | null;
   isHealthy: boolean;
+  isMock?: boolean;
+  enabled?: boolean;
 }
 
 /**
@@ -23,6 +25,20 @@ export async function checkStreamHealth(): Promise<StreamHealth[]> {
     const liveDir = path.join(process.cwd(), HLS_OUTPUT_DIR, cameraId, 'live');
     
     try {
+      // Check if camera is disabled
+      if (camera.enabled === false) {
+        results.push({
+          cameraId,
+          hasPlaylist: false,
+          segmentCount: 0,
+          lastSegmentTime: null,
+          isHealthy: false,
+          isMock: camera.mock,
+          enabled: false
+        });
+        continue;
+      }
+
       // Check if playlist exists
       const playlistPath = path.join(liveDir, 'live.m3u8');
       let hasPlaylist = false;
@@ -63,17 +79,27 @@ export async function checkStreamHealth(): Promise<StreamHealth[]> {
 
       // Determine if stream is healthy
       const now = Date.now();
-      const isHealthy = hasPlaylist && 
-                       segmentCount > 0 && 
-                       lastSegmentTime !== null && 
-                       (now - lastSegmentTime) < 30000; // Less than 30 seconds old
+      let isHealthy = false;
+      
+      if (camera.mock) {
+        // For mock cameras, just check if playlist exists
+        isHealthy = hasPlaylist;
+      } else {
+        // For real cameras, check playlist, segments, and freshness
+        isHealthy = hasPlaylist && 
+                   segmentCount > 0 && 
+                   lastSegmentTime !== null && 
+                   (now - lastSegmentTime) < 30000; // Less than 30 seconds old
+      }
 
       results.push({
         cameraId,
         hasPlaylist,
         segmentCount,
         lastSegmentTime,
-        isHealthy
+        isHealthy,
+        isMock: camera.mock,
+        enabled: camera.enabled
       });
 
       console.log(`[Monitor ${cameraId}] Health check:`, {
@@ -81,6 +107,8 @@ export async function checkStreamHealth(): Promise<StreamHealth[]> {
         segmentCount,
         lastSegmentTime: lastSegmentTime ? new Date(lastSegmentTime).toISOString() : null,
         isHealthy,
+        isMock: camera.mock,
+        enabled: camera.enabled,
         ageSeconds: lastSegmentTime ? Math.round((now - lastSegmentTime) / 1000) : null
       });
 
@@ -91,7 +119,9 @@ export async function checkStreamHealth(): Promise<StreamHealth[]> {
         hasPlaylist: false,
         segmentCount: 0,
         lastSegmentTime: null,
-        isHealthy: false
+        isHealthy: false,
+        isMock: camera.mock,
+        enabled: camera.enabled
       });
     }
   }
@@ -108,12 +138,12 @@ export function startStreamMonitoring() {
   // Check health every 30 seconds
   setInterval(async () => {
     const health = await checkStreamHealth();
-    const unhealthyStreams = health.filter(h => !h.isHealthy);
+    const unhealthyStreams = health.filter(h => !h.isHealthy && h.enabled !== false);
     
     if (unhealthyStreams.length > 0) {
       console.warn('[Monitor] Unhealthy streams detected:', unhealthyStreams);
     } else {
-      console.log('[Monitor] All streams healthy');
+      console.log('[Monitor] All enabled streams healthy');
     }
   }, 30000);
 } 

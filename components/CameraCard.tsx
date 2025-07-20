@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { Camera } from '@/cameras.config';
 import LiveStream from './LiveStream';
-import { IconWifiOff } from '@tabler/icons-react';
+import { IconWifiOff, IconDeviceDesktop } from '@tabler/icons-react';
 
 interface CameraCardProps {
   camera: Camera;
@@ -31,17 +31,32 @@ export default function CameraCard({ camera }: CameraCardProps) {
       }
     };
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+    // For mock cameras, set status to online immediately
+    if (camera.mock) {
+      setStatus('online');
+    } else {
+      fetchStatus();
+      const interval = setInterval(fetchStatus, 30000);
+      
+      return () => {
+        isMounted = false;
+        clearInterval(interval);
+      };
+    }
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
-  }, [camera.id]);
+  }, [camera.id, camera.mock]);
 
   const StatusIndicator = () => (
     <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+      {camera.mock && (
+        <div className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold text-white bg-blue-500">
+          <IconDeviceDesktop size={12} />
+          Mock
+        </div>
+      )}
       <div className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold text-white ${status === 'online' ? 'bg-green-500' : 'bg-red-500'}`}>
         {status === 'online' ? 'Online' : 'Offline'}
       </div>
@@ -74,6 +89,9 @@ export default function CameraCard({ camera }: CameraCardProps) {
         
         <div className="absolute bottom-0 left-0 p-4 z-10">
           <h3 className="font-semibold text-foreground">{camera.name}</h3>
+          {camera.mock && (
+            <p className="text-xs text-blue-300 mt-1">Development Mode</p>
+          )}
         </div>
       </div>
     </Link>

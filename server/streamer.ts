@@ -45,6 +45,52 @@ async function cleanupOldSegments(cameraId: string) {
 }
 
 /**
+ * Creates a mock HLS stream using a test pattern for development
+ */
+async function createMockHlsStream(cameraId: string, liveDir: string) {
+    console.log(`[HLS ${cameraId}] Creating mock stream for development...`);
+    
+    // Generate test pattern segments
+    const segmentDuration = 4;
+    const totalDuration = 120; // 2 minutes of mock content
+    const numSegments = Math.floor(totalDuration / segmentDuration);
+    
+    // Create mock playlist
+    const playlistContent = [
+        '#EXTM3U',
+        '#EXT-X-VERSION:3',
+        `#EXT-X-TARGETDURATION:${segmentDuration}`,
+        '#EXT-X-MEDIA-SEQUENCE:0',
+        '#EXT-X-PLAYLIST-TYPE:EVENT'
+    ];
+    
+    for (let i = 0; i < numSegments; i++) {
+        playlistContent.push(`#EXTINF:${segmentDuration}.0,`);
+        playlistContent.push(`mock_segment${String(i).padStart(6, '0')}.ts`);
+    }
+    
+    const playlistPath = path.join(liveDir, 'live.m3u8');
+    await fs.writeFile(playlistPath, playlistContent.join('\n'));
+    
+    // Create mock segments with test pattern
+    for (let i = 0; i < Math.min(5, numSegments); i++) {
+        const segmentPath = path.join(liveDir, `mock_segment${String(i).padStart(6, '0')}.ts`);
+        // Create a small dummy file (in production this would be actual video)
+        await fs.writeFile(segmentPath, Buffer.alloc(1024, 0));
+        
+        // Add to segment buffer
+        const segment = {
+            filename: `mock_segment${String(i).padStart(6, '0')}.ts`,
+            path: segmentPath,
+            startTime: Date.now() - (i * 1000), // Stagger timestamps
+        };
+        addHlsSegment(cameraId, segment, PRE_ROLL_BUFFER_SIZE);
+    }
+    
+    console.log(`[HLS ${cameraId}] Mock stream created with ${numSegments} segments`);
+}
+
+/**
  * Starts a persistent ffmpeg process for a single camera to generate an HLS stream.
  * @param camera - The camera configuration object.
  */
@@ -67,6 +113,19 @@ async function startHlsStreamForCamera(camera: Camera) {
     } catch (error) {
         console.error(`[HLS ${cameraId}] Failed to clean up live directory contents:`, error);
         // We can still proceed, ffmpeg might just overwrite files.
+    }
+
+    // Handle mock cameras (for development)
+    if (camera.mock) {
+        console.log(`[HLS ${cameraId}] Using mock stream for development`);
+        await createMockHlsStream(cameraId, liveDir);
+        return; // Don't start ffmpeg for mock cameras
+    }
+
+    // Check if camera is enabled
+    if (camera.enabled === false) {
+        console.log(`[HLS ${cameraId}] Camera is disabled, skipping`);
+        return;
     }
 
     const SEG_DUR = '4'; // Increased from 2 to 4 seconds
