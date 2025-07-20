@@ -97,6 +97,39 @@ export async function saveCameraSettings(newSettings: CameraSettings): Promise<v
     console.log('[DB] Camera settings saved successfully.');
 }
 
-// ... (you can add getEventById, updateEvent, deleteEventsById if needed, following the same pattern)
+export async function getEventById(id: string): Promise<Event | null> {
+  const db = await initializeDb();
+  const row = await db.get('SELECT * FROM events WHERE id = ?', id);
+  if (!row) return null;
+  return {
+    ...row,
+    payload: JSON.parse(row.payload),
+  };
+}
+
+export async function updateEvent(id: string, updates: Partial<Omit<Event, 'id'>>): Promise<Event | null> {
+  const db = await initializeDb();
+  
+  const setClauses = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+  if (!setClauses) return getEventById(id); // Nothing to update
+
+  const values = Object.values(updates).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
+  
+  const query = `UPDATE events SET ${setClauses} WHERE id = ?`;
+  values.push(id);
+  
+  const result = await db.run(query, ...values);
+
+  if (result.changes === 0) {
+    console.warn(`[DB] updateEvent: Event with id ${id} not found.`);
+    return null;
+  }
+
+  console.log(`[DB] Event updated successfully: ${id}`);
+  return getEventById(id);
+}
+
+
+// ... (you can add deleteEventsById if needed, following the same pattern)
 
 export { initializeDb }; 
