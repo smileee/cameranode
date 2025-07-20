@@ -115,13 +115,6 @@ async function startHlsStreamForCamera(camera: Camera) {
         // We can still proceed, ffmpeg might just overwrite files.
     }
 
-    // Handle mock cameras (for development)
-    if (camera.mock) {
-        console.log(`[HLS ${cameraId}] Using mock stream for development`);
-        await createMockHlsStream(cameraId, liveDir);
-        return; // Don't start ffmpeg for mock cameras
-    }
-
     // Check if camera is enabled
     if (camera.enabled === false) {
         console.log(`[HLS ${cameraId}] Camera is disabled, skipping`);
@@ -132,41 +125,39 @@ async function startHlsStreamForCamera(camera: Camera) {
     const PLAYLIST_SZ = '25'; // 25×4s = 100s de buffer (increased from 12×2s = 24s)
     const HLS_FLAGS = 'program_date_time+delete_segments+append_list';
 
-    const baseArgs = (
-        codecArgs: string[]
-    ) => [
-        '-rtsp_transport','tcp',
-        '-analyzeduration', '10M', // Analyze 10MB of data to better determine stream properties
-        '-probesize', '10M',      // Probe 10MB of data to identify streams
-        '-err_detect', 'ignore_err', // Ignore errors in the input stream
-        '-fflags', '+genpts+discardcorrupt', // Regenerate timestamps and discard corrupted frames
-        ...codecArgs,
-        '-f','hls',
-        '-hls_time', SEG_DUR,
-        '-hls_list_size', PLAYLIST_SZ,
-        '-hls_flags', HLS_FLAGS,
-        '-hls_segment_filename',
-        `${liveDir}/segment%06d.ts`,
-        '-hls_segment_type',
-        'mpegts',
-        '-hls_allow_cache',
-        '0',
-        '-hls_base_url',
-        'live/',
-        `${liveDir}/live.m3u8`
-    ];
+    let ffmpegArgs;
 
-    // Both cameras will now be re-encoded to ensure a clean, stable stream and fix timestamp issues.
-    // The 'useCopy' logic has been removed.
-    const ffmpegArgs = baseArgs([
-        '-i', camera.rtspUrl,
-        '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
-        '-pix_fmt','yuv420p','-g','120','-an',
-        '-b:v','2000k','-maxrate','2500k','-bufsize','4000k',
-        '-profile:v','main','-level','4.1',
-        '-strict', '-2', // Allow use of experimental codecs/features if needed
-    ]);
-
+    if (camera.mock) {
+        console.log(`[HLS ${cameraId}] Using mock stream for development`);
+        await createMockHlsStream(cameraId, liveDir);
+        return; // Don't start ffmpeg for mock cameras
+    } else {
+         ffmpegArgs = [
+            '-rtsp_transport','tcp',
+            '-analyzeduration', '10M', // Analyze 10MB of data to better determine stream properties
+            '-probesize', '10M',      // Probe 10MB of data to identify streams
+            '-err_detect', 'ignore_err', // Ignore errors in the input stream
+            '-fflags', '+genpts+discardcorrupt', // Regenerate timestamps and discard corrupted frames
+            '-i', camera.rtspUrl,
+            '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
+            '-pix_fmt','yuv420p','-g','120','-an',
+            '-b:v','2000k','-maxrate','2500k','-bufsize','4000k',
+            '-profile:v','main','-level','4.1',
+            '-strict', '-2', // Allow use of experimental codecs/features if needed
+            '-f','hls',
+            '-hls_time', SEG_DUR,
+            '-hls_list_size', PLAYLIST_SZ,
+            '-hls_flags', HLS_FLAGS,
+            '-hls_segment_filename',
+            `${liveDir}/segment%06d.ts`,
+            '-hls_segment_type',
+            'mpegts',
+            '-hls_allow_cache',
+            '0',
+            `${liveDir}/live.m3u8`
+        ];
+    }
+    
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
 
     const ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
