@@ -39,9 +39,20 @@ export default function LiveStream({ src, controls = false, videoRef: parentRef,
 
     if (Hls.isSupported() && src.endsWith('m3u8')) {
       const hls = new Hls({
-        maxBufferLength: 60, // Increased from 30 to 60 seconds
-        liveSyncDuration: 8, // Increased from 4 to 8 seconds
-        liveMaxLatencyDuration: 16, // New: maximum latency
+        // Increase the buffer size to handle network fluctuations
+        maxBufferLength: 60, // seconds
+        maxMaxBufferLength: 120, // seconds
+        
+        // More aggressive retry logic for manifest and fragment loading
+        manifestLoadingMaxRetry: 5,
+        manifestLoadingRetryDelay: 1000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
+
+        // Start loading data from the live edge
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 4,
+
         lowLatencyMode: true,
         backBufferLength: 90, // New: keep more segments in memory
         enableWorker: true, // New: use web workers for better performance
