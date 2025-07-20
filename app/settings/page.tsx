@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { IconArrowLeft } from '@tabler/icons-react';
 import { CAMERAS } from '../../cameras.config';
 
 type CameraSettings = {
@@ -15,14 +17,14 @@ const ToggleSwitch = ({ enabled, onChange }: { enabled: boolean; onChange: () =>
   <button
     type="button"
     className={`${
-      enabled ? 'bg-blue-600' : 'bg-gray-200'
-    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+      enabled ? 'bg-white' : 'bg-muted'
+    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black`}
     onClick={onChange}
   >
     <span
       className={`${
         enabled ? 'translate-x-5' : 'translate-x-0'
-      } inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+      } inline-block h-5 w-5 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out`}
     />
   </button>
 );
@@ -88,47 +90,54 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="bg-background text-foreground min-h-screen">
       <div className="container mx-auto p-8">
-        <h1 className="text-4xl font-bold text-gray-800 mb-8">Settings</h1>
-        <div className="space-y-6">
+        <header className="mb-12">
+          <Link href="/" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors mb-4">
+            <IconArrowLeft size={18} className="mr-2" />
+            Back to Cameras
+          </Link>
+          <h1 className="text-4xl font-bold">Settings</h1>
+        </header>
+
+        <div className="max-w-2xl mx-auto space-y-8">
           {CAMERAS.map(camera => (
-            <div key={camera.id} className="bg-white p-6 rounded-xl shadow-md">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">{camera.name}</h2>
+            <div key={camera.id} className="bg-muted/50 p-6 rounded-lg border border-border">
+              <h2 className="text-xl font-semibold mb-4">{camera.name}</h2>
               <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-700">Alert Triggers</h3>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium text-gray-800">Person Detected</span>
+                <h3 className="text-lg font-medium">Alert Triggers</h3>
+                <div className="flex items-center justify-between p-4 bg-muted rounded-md">
+                  <span className="font-medium">Person Detected</span>
                   <ToggleSwitch
                     enabled={cameraSettings[camera.id]?.person ?? false}
                     onChange={() => handleToggle(camera.id, 'person')}
                   />
                 </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium text-gray-800">Dog Detected</span>
+                <div className="flex items-center justify-between p-4 bg-muted rounded-md">
+                  <span className="font-medium">Dog Detected</span>
                   <ToggleSwitch
                     enabled={cameraSettings[camera.id]?.dog ?? false}
                     onChange={() => handleToggle(camera.id, 'dog')}
                   />
                 </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium text-gray-800">Bird Detected</span>
+                <div className="flex items-center justify-between p-4 bg-muted rounded-md">
+                  <span className="font-medium">Bird Detected</span>
                   <ToggleSwitch
                     enabled={cameraSettings[camera.id]?.bird ?? false}
                     onChange={() => handleToggle(camera.id, 'bird')}
                   />
                 </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-200 flex space-x-3">
+              <div className="mt-6 pt-6 border-t border-border flex space-x-3">
                 <button
                   onClick={() => handleDisconnect(camera.id)}
-                  className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors"
+                  className="btn bg-red-800/20 border-red-800 text-red-400 hover:bg-red-800/40"
                 >
                   Disconnect
                 </button>
                 <button
                   onClick={() => handleEraseData(camera.id)}
-                  className="bg-yellow-400 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-yellow-500 transition-colors"
+                  className="btn bg-yellow-800/20 border-yellow-800 text-yellow-400 hover:bg-yellow-800/40"
                 >
                   Erase Data
                 </button>

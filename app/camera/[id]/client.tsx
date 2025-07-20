@@ -3,6 +3,8 @@
 import { Camera } from '@/cameras.config';
 import LiveStream from '@/components/LiveStream';
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
+import { IconArrowLeft } from '@tabler/icons-react';
 import { Timeline, Event } from 'react-timeline-scribble';
 
 interface DetectionEvent {
@@ -91,40 +93,45 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
   };
 
   return (
-    <div className="flex flex-col h-screen bg-black text-white p-4">
-      <header className="flex justify-between items-center mb-4">
-        <div>
-          <a href="/" className="text-blue-400 hover:underline">&larr; Back to Cameras</a>
-          <h1 className="text-2xl font-bold mt-2">{camera.name}</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <button onClick={handleGoLive} className={`font-bold py-2 px-4 rounded transition-colors ${isLive ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
-            Live
-          </button>
-          <button onClick={handleGoDvr} className={`font-bold py-2 px-4 rounded transition-colors ${!isLive ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
-            DVR
-          </button>
-        </div>
-      </header>
+    <div className="flex flex-col md:flex-row h-screen bg-background text-foreground">
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col">
+        <header className="flex justify-between items-center p-4 border-b border-border">
+          <div>
+            <Link href="/" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
+              <IconArrowLeft size={16} className="mr-2" />
+              Back to Cameras
+            </Link>
+            <h1 className="text-xl font-semibold mt-1">{camera.name}</h1>
+          </div>
+          <div className="flex items-center gap-2 p-1 bg-muted rounded-lg">
+            <button onClick={handleGoLive} className={`px-3 py-1 text-sm rounded-md transition-colors ${isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
+              Live
+            </button>
+            <button onClick={handleGoDvr} className={`px-3 py-1 text-sm rounded-md transition-colors ${!isLive ? 'bg-white text-black' : 'bg-transparent text-white'}`}>
+              DVR
+            </button>
+          </div>
+        </header>
 
-      <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4" style={{maxHeight: 'calc(100vh - 100px)'}}>
-        <div className="md:col-span-2 h-full flex flex-col relative">
-          {isLive && (
-            <div className="absolute top-2 right-2 z-10 bg-black bg-opacity-50 text-white p-2 rounded text-lg font-mono">
-              {currentTime.toLocaleString()}
-            </div>
-          )}
-          <div className="flex-grow">
+        <div className="flex-grow p-4 relative">
+          <div className="bg-muted aspect-video w-full rounded-lg overflow-hidden relative">
+            {isLive && (
+              <div className="absolute top-3 right-3 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs font-mono">
+                {currentTime.toLocaleTimeString()}
+              </div>
+            )}
             <LiveStream
               src={currentStreamUrl}
-              videoRef={videoRef} // Pass ref to LiveStream component
-              controls={!isLive} // Show controls only in DVR mode
+              videoRef={videoRef}
+              controls={!isLive}
             />
           </div>
+
           {!isLive && (
-            <div className="w-full p-4 bg-gray-900 rounded-lg mt-4">
-              <h3 className="text-lg font-bold mb-2">Recorded Events</h3>
-              <div className="h-48 overflow-y-auto">
+            <div className="w-full p-4 bg-muted/50 border border-border rounded-lg mt-4">
+              <h3 className="text-lg font-semibold mb-2">Recorded Events</h3>
+              <div className="h-40 overflow-y-auto">
                 <Timeline>
                   {events.map((event) => (
                     <Event
@@ -132,31 +139,37 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
                       interval={new Date(event.timestamp).toLocaleString()}
                       title={event.label}
                       onClick={() => handleTimelineEventClick(event.timestamp)}
-                    >
-                      {/* You can add more details here if you want */}
-                    </Event>
+                    />
                   ))}
                 </Timeline>
               </div>
             </div>
           )}
         </div>
-        <aside className="bg-gray-900 p-4 rounded-lg h-full overflow-y-auto">
-          <h2 className="text-lg font-bold mb-4">Detection Events</h2>
+      </main>
+
+      {/* Sidebar */}
+      <aside className="w-full md:w-80 border-l border-border flex flex-col">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Detection Events</h2>
+        </div>
+        <div className="flex-grow overflow-y-auto p-2">
           {events.length > 0 ? (
             <ul>
               {events.map((event, index) => (
                 <li
                   key={event.id}
-                  className={`mb-4 p-2 rounded flex items-center gap-4 cursor-pointer hover:bg-gray-700 bg-gray-800`}
+                  className="mb-2 p-2 rounded-md flex items-center gap-3 cursor-pointer hover:bg-accent"
                   onClick={() => handleEventListClick(event)}
                 >
-                  {event.thumbnailPath && (
-                    <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-24 h-16 object-cover rounded" />
+                  {event.thumbnailPath ? (
+                    <img src={event.thumbnailPath} alt={`Thumbnail for ${event.label}`} className="w-20 h-12 object-cover rounded-md bg-muted" />
+                  ) : (
+                    <div className="w-20 h-12 bg-muted rounded-md" />
                   )}
                   <div>
-                    <p className="font-bold text-blue-400">{event.label}</p>
-                    <p className="text-sm text-gray-400">
+                    <p className="font-semibold capitalize">{event.label}</p>
+                    <p className="text-sm text-muted-foreground">
                       {new Date(event.timestamp).toLocaleString()}
                     </p>
                   </div>
@@ -164,10 +177,12 @@ export default function ClientPage({ camera, events: initialEvents }: ClientPage
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500">No detection events yet.</p>
+            <div className="text-center p-8 text-muted-foreground">
+              <p>No detection events yet.</p>
+            </div>
           )}
-        </aside>
-      </main>
+        </div>
+      </aside>
     </div>
   );
 } 
