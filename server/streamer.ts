@@ -138,11 +138,13 @@ async function startHlsStreamForCamera(camera: Camera) {
         codecArgs: string[]
     ) => [
         '-rtsp_transport','tcp',
-        // '-stimeout','10000000', // REMOVIDO: não suportado em alguns builds do ffmpeg
-        '-reconnect','1', // Enable reconnection
-        '-reconnect_at_eof','1', // Reconnect at end of file
-        '-reconnect_streamed','1', // Reconnect for streamed content
-        '-reconnect_delay_max','5', // Max 5 second delay between reconnection attempts
+        // '-stimeout','10000000', // REMOVED: Not supported in some ffmpeg builds
+        // The following reconnect options are not supported in the Raspberry Pi ffmpeg build.
+        // The server-side restart logic will handle reconnection instead.
+        // '-reconnect','1', 
+        // '-reconnect_at_eof','1',
+        // '-reconnect_streamed','1',
+        // '-reconnect_delay_max','5',
         ...codecArgs,
         '-f','hls',
         '-hls_time', SEG_DUR,
