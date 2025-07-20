@@ -136,6 +136,8 @@ async function startHlsStreamForCamera(camera: Camera) {
         codecArgs: string[]
     ) => [
         '-rtsp_transport','tcp',
+        '-analyzeduration', '10M', // Analyze 10MB of data to better determine stream properties
+        '-probesize', '10M',      // Probe 10MB of data to identify streams
         '-err_detect', 'ignore_err', // Ignore errors in the input stream
         '-fflags', '+genpts+discardcorrupt', // Regenerate timestamps and discard corrupted frames
         ...codecArgs,
@@ -157,7 +159,8 @@ async function startHlsStreamForCamera(camera: Camera) {
         '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
         '-pix_fmt','yuv420p','-g','120','-an',
         '-b:v','2000k','-maxrate','2500k','-bufsize','4000k',
-        '-profile:v','main','-level','4.1', // More appropriate profile/level for 1080p
+        '-profile:v','main','-level','4.1',
+        '-strict', '-2', // Allow use of experimental codecs/features if needed
     ]);
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);
