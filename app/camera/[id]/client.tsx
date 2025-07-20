@@ -23,8 +23,8 @@ interface ClientPageProps {
 
 export default function ClientPage({ camera, events: initialEvents }: ClientPageProps) {
   const [events, setEvents] = useState<DetectionEvent[]>(initialEvents);
-  const liveStreamUrl = `/api/camera/${camera.id}/live`;
-  const dvrStreamUrl = `/api/camera/${camera.id}/dvr`;
+  const liveStreamUrl = `/api/camera/${camera.id}/live/playlist.m3u8`;
+  const dvrStreamUrl = `/api/camera/${camera.id}/dvr/playlist.m3u8`;
 
   const [currentStreamUrl, setCurrentStreamUrl] = useState(liveStreamUrl);
   const [isLive, setIsLive] = useState(true);
