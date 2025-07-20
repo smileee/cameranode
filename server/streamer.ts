@@ -136,13 +136,7 @@ async function startHlsStreamForCamera(camera: Camera) {
         codecArgs: string[]
     ) => [
         '-rtsp_transport','tcp',
-        // '-stimeout','10000000', // REMOVED: Not supported in some ffmpeg builds
-        // The following reconnect options are not supported in the Raspberry Pi ffmpeg build.
-        // The server-side restart logic will handle reconnection instead.
-        // '-reconnect','1', 
-        // '-reconnect_at_eof','1',
-        // '-reconnect_streamed','1',
-        // '-reconnect_delay_max','5',
+        '-err_detect', 'ignore_err', // Ignore errors in the input stream
         '-fflags', '+genpts+discardcorrupt', // Regenerate timestamps and discard corrupted frames
         ...codecArgs,
         '-f','hls',
@@ -161,9 +155,9 @@ async function startHlsStreamForCamera(camera: Camera) {
     const ffmpegArgs = baseArgs([
         '-i', camera.rtspUrl,
         '-c:v','libx264','-preset','veryfast','-tune','zerolatency',
-        '-pix_fmt','yuv420p','-g','120','-an', // Increased GOP size from 60 to 120
-        '-b:v','2000k','-maxrate','2500k','-bufsize','4000k', // Better bitrate control
-        '-profile:v','baseline','-level','3.0', // More compatible profile
+        '-pix_fmt','yuv420p','-g','120','-an',
+        '-b:v','2000k','-maxrate','2500k','-bufsize','4000k',
+        '-profile:v','main','-level','4.1', // More appropriate profile/level for 1080p
     ]);
 
     console.log(`[FFMPEG ${cameraId}] Spawning process: ffmpeg ${ffmpegArgs.join(' ')}`);

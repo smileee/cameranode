@@ -22,7 +22,9 @@ async function initializeDb() {
       id TEXT PRIMARY KEY,
       cameraId TEXT NOT NULL,
       timestamp DATETIME NOT NULL,
+      type TEXT,
       label TEXT NOT NULL,
+      payload TEXT,
       status TEXT NOT NULL,
       recordingPath TEXT,
       thumbnailPath TEXT
